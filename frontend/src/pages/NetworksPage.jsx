@@ -4,6 +4,8 @@ import AppLayout from '../layouts/AppLayout'
 import '../styles/networks.css'
 import RouterNode from '../components/nodes/RouterNode'
 import ServerNode from '../components/nodes/ServerNode'
+import { createNetwork } from '../services/network.service'
+import useNetworkStore from '../stores/network.store'
 
 const nodeTypes = {
     routerNode: RouterNode,
@@ -61,6 +63,28 @@ function NetworksPage() {
         )
     }
 
+    const setCurrentNetwork = useNetworkStore((state) => state.setCurrentNetwork)
+
+    async function saveNetwork() {
+        try {
+            const networkData = {
+                name: 'My Infrastructure',
+                description: 'NetVerse Topology',
+                nodes,
+                edges
+            }
+
+            const network = await createNetwork(networkData)
+
+            setCurrentNetwork(network)
+
+            alert('Network saved!')
+        } catch(err) {
+            console.error(err)
+            alert('Failed to save network!')
+        }
+    }
+
     function addRouter() {
         const newNode = {
             id: `${Date.now()}`,
@@ -74,7 +98,7 @@ function NetworksPage() {
                 label: 'Router',
             },
 
-            type: 'default',
+            type: 'routerNode',
         }
 
         setNodes((nodes) => [
@@ -96,7 +120,7 @@ function NetworksPage() {
                 label: 'Server',
             },
 
-            type: 'default',
+            type: 'serverNode',
         }
 
         setNodes((nodes) => [
@@ -116,6 +140,10 @@ function NetworksPage() {
 
                 <button onClick={addServer}>
                     Add Server
+                </button>
+
+                <button onClick={saveNetwork}>
+                    Save Network
                 </button>
 
             </div>

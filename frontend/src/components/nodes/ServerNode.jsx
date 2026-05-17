@@ -1,6 +1,13 @@
+import { Handle, Position } from 'reactflow'
+
 function ServerNode({ data }) {
     return(
         <div className="custom-node server-node">
+            <Handle
+                type="target"
+                position={Position.Left}
+            />
+
             <div className="node-header">
                 Server
             </div>
@@ -12,6 +19,11 @@ function ServerNode({ data }) {
                     10.0.0.25
                 </span>
             </div>
+
+            <Handle
+                type="source"
+                position={Position.Right}
+            />
         </div>
     )
 }

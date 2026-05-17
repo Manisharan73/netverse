@@ -1,6 +1,13 @@
+import { Handle, Position } from 'reactflow'
+
 function RouterNode({ data }) {
     return(
         <div className="custom-node router-node">
+            <Handle 
+                type='target'
+                position={Position.Left}
+            />
+
             <div className="node-header">
                 Router
             </div>
@@ -12,6 +19,11 @@ function RouterNode({ data }) {
                     192.168.1.1
                 </span>
             </div>
+
+            <Handle 
+                type='source'
+                position={Position.Right}
+            />
         </div>
     )
 }

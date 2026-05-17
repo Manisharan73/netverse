@@ -10,9 +10,13 @@ app.use(cors())
 app.use(express.json())
 
 const User = require('./modules/users/user.model')
+require('./modules/network/associations')
 
 const authRoutes = require('./modules/auth/auth.routes')
 app.use('/api/auth', authRoutes)
+
+const networkRoutes = require('./modules/network/network.routes')
+app.use('/api/networks', networkRoutes)
 
 app.get('/', (req, res) => {
     res.json({
