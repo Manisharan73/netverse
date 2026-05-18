@@ -22,7 +22,37 @@ async function getNetwork(req, res) {
     }
 }
 
+async function getNetworkById(req, res) {
+    try {
+        const network = await networkService.getNetworkById(req.params.id)
+        res.json(network)
+    } catch(err) {
+        res.status(500).json({
+            error: err.message
+        })
+    }
+}
+
+async function updateNetwork(req, res) {
+    try {
+        const network = await networkService.updateNetwork(
+            req.params.id,
+            req.body
+        )
+
+        res.json(network)
+    } catch(err) {
+        console.error(err)
+
+        res.status(500).json({
+            error: err.message
+        })
+    }
+}
+
 module.exports = {
     createNetwork,
-    getNetwork
+    getNetwork,
+    getNetworkById,
+    updateNetwork
 }

@@ -44,7 +44,69 @@ async function getNetwork() {
     })
 }
 
+async function getNetworkById(id) {
+    return await Network.findByPk(id, {
+        include: [
+            Node,
+            Edge
+        ]
+    })
+}
+
+async function updateNetwork(id, data) {
+    const network = await Network.findByPk(id)
+
+    if(!network) {
+        throw new Error('Network not found!')
+    }
+
+    await network.update({
+        name: data.name,
+        description: data.description
+    })
+
+    await Edge.destroy({
+        where: {
+            NetworkId: id
+        }
+    })
+
+    await Node.destroy({
+        where: {
+            NetworkId: id
+        }
+    })
+
+    if(data.nodes?.length) {
+        for(const node of data.nodes) {
+            await Node.create({
+                NetworkId: id,
+                type: node.type,
+                label: node.data.label,
+                ipAddress: node.data.ip || '',
+                posX: node.position.x,
+                posY: node.position.y,
+                status: node.data.status || 'ONLINE'
+            })
+        }
+    }
+
+    if(data.edges?.length) {
+        for(const edge of data.edges) {
+            await Edge.create({
+                NetworkId: id,
+                sourceNodeId: edge.source,
+                targetNodeId: edge.target
+            })
+        }
+    }
+
+    return network
+}
+
 module.exports = {
     createNetwork,
-    getNetwork
+    getNetwork,
+    getNetworkById,
+    updateNetwork
 }

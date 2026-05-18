@@ -9,3 +9,13 @@ export async function getNetwork() {
     const res = await API.get('/networks')
     return res.data
 }
+
+export async function getNetworkById(id) {
+    const res = await API.get(`/networks/${id}`)
+    return res.data
+}
+
+export async function updateNetwork(id, data) {
+    const res = await API.put(`/networks/${id}`, data)
+    return res.data
+}
