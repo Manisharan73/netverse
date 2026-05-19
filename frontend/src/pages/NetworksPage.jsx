@@ -52,6 +52,8 @@ const initialEdges = [
 
         source: '1',
         target: '2',
+
+        animated: true
     },
 ]
 
@@ -70,14 +72,14 @@ function NetworksPage() {
     function onConnect(connection) {
         const newEdge = {
             ...connection,
-            id: `e${connection.source}-${connection.target}`
+            id: `e${connection.source}-${connection.target}`,
+            animated: true
         }
 
         setEdges((edges) => addEdge(newEdge, edges))
 
         socket.emit('edge:add', newEdge)
 
-        console.log('edge add')
     }
 
     const setCurrentNetwork = useNetworkStore((state) => state.setCurrentNetwork)
@@ -164,12 +166,12 @@ function NetworksPage() {
 
     async function loadNetwork() {
         try {
-            const network = await getNetworkById(10)
+            const network = await getNetworkById(1)
 
             setCurrentNetworkId(network.id)
 
             const formattedNodes = network.Nodes.map((node) => ({
-                id: node.id.toString(),
+                id: node.frontendId.toString(),
                 type: node.type || 'default',
                 position: {
                     x: Number(node.posX) || 0,
@@ -184,6 +186,7 @@ function NetworksPage() {
                 id: edge.id.toString(),
                 source: edge.sourceNodeId.toString(),
                 target: edge.targetNodeId.toString(),
+                animated: true
             }))
 
 
@@ -458,7 +461,17 @@ function NetworksPage() {
                     fitView
                 >
 
-                    <MiniMap />
+                    <MiniMap
+                        nodeColor={(node) => {
+                            switch(node.type) {
+                                case 'routerNode': return '#2563eb'
+
+                                case 'serverNode': return '#16a34a'
+
+                                default: return '#6b7280'
+                            }
+                        }}
+                    />
 
                     <Controls />
 

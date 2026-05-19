@@ -17,10 +17,10 @@ function validateRegister(data) {
 }
 
 function validateLogin(data) {
-    const { email, password } = data
+    const { identifier, password } = data
 
-    if(!email || !password) {
-        throw new Error('Email and Password required')
+    if(!identifier || !password) {
+        throw new Error('Identifier and Password required')
     }
 
     return true

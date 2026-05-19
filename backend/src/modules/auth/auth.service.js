@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 const User = require('../users/user.model')
+const { Op } = require('sequelize')
 require('dotenv').config()
 
 const { validateRegister, validateLogin } = require('./auth.validation')
@@ -32,11 +33,16 @@ async function registerUser(data) {
 async function loginUser(data) {
     validateLogin(data)
 
-    const { email, password } = data
-
     const user = await User.findOne({
         where: {
-            email
+            [Op.or]: [
+                {
+                    email: data.identifier
+                },
+                {
+                    username: data.identifier
+                }
+            ]
         }
     })
 
@@ -44,7 +50,7 @@ async function loginUser(data) {
         throw new Error('Invalid credentials!')
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password)
+    const isPasswordValid = await bcrypt.compare(data.password, user.password)
 
     if(!isPasswordValid) {
         throw new Error('Invalid credentials!')

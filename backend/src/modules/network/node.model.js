@@ -2,6 +2,11 @@ const { DataTypes } = require('sequelize')
 const sequelize = require('../../database/index')
 
 const Node = sequelize.define('Node', {
+    frontendId: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
+
     type: {
         type: DataTypes.STRING,
         allowNull: false

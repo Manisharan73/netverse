@@ -9,7 +9,7 @@ function LoginPage() {
     const login = useAuthStore((state) => state.login)
 
     const [formData, setFormData] = useState({
-        email: '',
+        identifier: '',
         password: ''
     })
 
@@ -26,7 +26,7 @@ function LoginPage() {
             console.error(err)
 
             alert(
-                error.response?.data?.error ||
+                err.response?.data?.error ||
                 "Login failed"
             )
         }
@@ -39,13 +39,13 @@ function LoginPage() {
 
                 <form onSubmit={handleSubmit}>
                     <input
-                        type='email'
-                        placeholder='Email'
-                        value={formData.email}
+                        type='text'
+                        placeholder='Username or Email'
+                        value={formData.identifier}
                         onChange={(e) => {
                             setFormData({
                                 ...formData,
-                                email: e.target.value
+                                identifier: e.target.value
                             })
                         }}
                     />

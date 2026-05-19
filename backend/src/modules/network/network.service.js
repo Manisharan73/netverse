@@ -11,6 +11,7 @@ async function createNetwork(data) {
     if(data.nodes?.length) {
         for(const node of data.nodes) {
             await Node.create({
+                frontendId: node.id,
                 NetworkId: network.id,
                 type: node.type,
                 label: node.data.label,
@@ -80,6 +81,7 @@ async function updateNetwork(id, data) {
     if(data.nodes?.length) {
         for(const node of data.nodes) {
             await Node.create({
+                frontendId: node.id,
                 NetworkId: id,
                 type: node.type,
                 label: node.data.label,
