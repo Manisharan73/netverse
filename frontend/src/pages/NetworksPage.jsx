@@ -6,7 +6,8 @@ import RouterNode from '../components/nodes/RouterNode'
 import ServerNode from '../components/nodes/ServerNode'
 import { createNetwork, getNetworkById, updateNetwork } from '../services/network.service'
 import useNetworkStore from '../stores/network.store'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import socket from '../websocket/socket'
 
 const nodeTypes = {
     routerNode: RouterNode,
@@ -67,11 +68,17 @@ function NetworksPage() {
     }
 
     function onConnect(connection) {
-        setEdges((edges) =>
-            addEdge(connection, edges)
-        )
-    }
+        const newEdge = {
+            ...connection,
+            id: `e${connection.source}-${connection.target}`
+        }
 
+        setEdges((edges) => addEdge(newEdge, edges))
+
+        socket.emit('edge:add', newEdge)
+
+        console.log('edge add')
+    }
 
     const setCurrentNetwork = useNetworkStore((state) => state.setCurrentNetwork)
 
@@ -127,6 +134,8 @@ function NetworksPage() {
             ...nodes,
             newNode
         ])
+
+        socket.emit('node:add', newNode)
     }
 
     function addServer() {
@@ -149,6 +158,8 @@ function NetworksPage() {
             ...nodes,
             newNode
         ])
+
+        socket.emit('node:add', newNode)
     }
 
     async function loadNetwork() {
@@ -186,7 +197,6 @@ function NetworksPage() {
     }
 
     function deleteSelectedNode() {
-
         if (!selectedNode) {
             return
         }
@@ -215,8 +225,143 @@ function NetworksPage() {
             )
         )
 
+        socket.emit('node:delete', { id: selectedNode.id })
+
         setSelectedNode(null)
     }
+
+    function onNodeDragStop(event, node) {
+        socket.emit(
+            'node:move',
+            {
+                id: node.id,
+                position: {
+                    x: node.position.x,
+                    y: node.position.y
+                }
+            }
+        )
+
+        console.log('Emitted')
+    }
+
+    useEffect(() => {
+        socket.on('connect', () => {
+            console.log('Connected: ', socket.id)
+        })
+
+        socket.on('node:added', (node) => {
+            setNodes((nodes) => [
+                ...nodes,
+                node
+            ])
+        })
+
+        socket.on('node:moved', (data) => {
+            setNodes((currentNodes) =>
+                currentNodes.map((node) => {
+                    if (node.id.toString() === data.id.toString()) {
+                        return {
+                            ...node,
+                            position: {
+                                x: Number(data.position.x),
+                                y: Number(data.position.y)
+                            }
+                        }
+                    }
+
+                    return node
+                })
+            )
+        }
+        )
+
+        socket.on('edge:added', (edge) => {
+            setEdges((edges) => addEdge(edge, edges))
+        })
+
+        socket.on('node:deleted', (data) => {
+            setEdges((edges) =>
+                edges.filter((edge) =>
+                    edge.source.toString() !== data.id.toString
+                    &&
+                    edge.target.toString() !== data.id.toString()
+                )
+            )
+
+            setNodes((nodes) =>
+                nodes.filter((node) => node.id.toString() !== data.id.toString())
+            )
+        })
+
+        socket.on(
+            'node:labelUpdated',
+            (data) => {
+
+                setNodes((currentNodes) =>
+
+                    currentNodes.map((node) => {
+
+                        if (
+                            node.id.toString()
+                            ===
+                            data.id.toString()
+                        ) {
+
+                            return {
+
+                                ...node,
+
+                                data: {
+
+                                    ...node.data,
+
+                                    label: data.label
+                                }
+                            }
+                        }
+
+                        return node
+                    })
+                )
+
+                setSelectedNode((prev) => {
+
+                    if (
+                        !prev
+                        ||
+                        prev.id.toString()
+                        !==
+                        data.id.toString()
+                    ) {
+
+                        return prev
+                    }
+
+                    return {
+
+                        ...prev,
+
+                        data: {
+
+                            ...prev.data,
+
+                            label: data.label
+                        }
+                    }
+                })
+            }
+        )
+
+        return () => {
+            socket.off('connect')
+            socket.off('node:added')
+            socket.off('node:moved')
+            socket.off('edge:added')
+            socket.off('node:deleted')
+            socket.off('node:updatedLabel')
+        }
+    }, [])
 
     return (
         <AppLayout>
@@ -278,6 +423,14 @@ function NetworksPage() {
                                             label: updatedLabel
                                         }
                                     }))
+
+                                    socket.emit(
+                                        'node:updateLabel',
+                                        {
+                                            id: selectedNode.id,
+                                            label: updatedLabel
+                                        }
+                                    )
                                 }}
                             />
                         </p>
@@ -301,6 +454,7 @@ function NetworksPage() {
                     onConnect={onConnect}
                     nodeTypes={nodeTypes}
                     onNodeClick={onNodeClick}
+                    onNodeDragStop={onNodeDragStop}
                     fitView
                 >
 
