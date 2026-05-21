@@ -65,7 +65,7 @@ function NetworksPage() {
     const [saveStatus, setSaveStatus] = useState('Saved')
     const [logs, setLogs] = useState([])
     const [pingTarget, setPingTarget] = useState('')
-    const [activeEdge, setActiveEdge] = useState(null)
+    const [activeEdges, setActiveEdges] = useState([])
     const [edgeStatus, setEdgeStatus] = useState('success')
 
     const terminalRef = useRef(null)
@@ -247,6 +247,48 @@ function NetworksPage() {
         setSelectedNode(null)
     }
 
+    function findPath(startId, targetId) {
+        const adjacency = {}
+
+        edges.forEach((edge) => {
+            if (!adjacency[edge.source]) {
+                adjacency[edge.source] = []
+            }
+
+            if (!adjacency[edge.target]) {
+                adjacency[edge.target] = []
+            }
+
+            adjacency[edge.source].push(edge.target)
+            adjacency[edge.target].push(edge.source)
+        })
+
+        const queue = [[startId]]
+
+        const visited = new Set()
+
+        while (queue.length > 0) {
+            const path = queue.shift()
+            const node = path[path.length - 1]
+
+            if (node === targetId) {
+                return path
+            }
+
+            if (!visited.has(node)) {
+                visited.add(node)
+
+                const neighbors = adjacency[node] || []
+
+                for (const neighbor of neighbors) {
+                    queue.push([...path, neighbor])
+                }
+            }
+        }
+
+        return null
+    }
+
     function pingNode() {
         if (!selectedNode || !pingTarget) {
             return
@@ -258,40 +300,82 @@ function NetworksPage() {
             return
         }
 
-        const edge = edges.find(
-            (edge) =>
-                (
-                    edge.source.toString() === selectedNode.id.toString()
-
-                    &&
-
-                    edge.target.toString() === targetNode.id.toString()
-                )
-
-                ||
-
-                (
-                    edge.target.toString() === selectedNode.id.toString()
-
-                    &&
-
-                    edge.source.toString() === targetNode.id.toString()
-                )
+        const path = findPath(
+            selectedNode.id,
+            targetNode.id
         )
 
-        let latency = Math.floor(Math.random() * 100)
+        if (!path) {
+            const timestamp = new Date().toLocaleTimeString()
 
-        if (targetNode.data.status === 'WARNING') {
-            latency += 150
+            setLogs((prev) => [
+                `[${timestamp}] Destination unreachable`,
+                ...prev
+            ])
+
+            return
         }
 
-        if (edge) {
-            setActiveEdge(edge.id)
+        const traversedEdges = []
 
-            setTimeout(() => {
-                setActiveEdge(null)
-            }, latency + 500)
+        for (let i = 0; i < path.length - 1; i++) {
+            const source = path[i]
+
+            const target = path[i + 1]
+
+            const edge = edges.find(
+                (edge) =>
+                    (
+                        edge.source.toString() === source.toString()
+                        &&
+                        edge.target.toString() === target.toString()
+                    )
+
+                    ||
+
+                    (
+                        edge.source.toString() === target.toString()
+                        &&
+                        edge.target.toString() === source.toString()
+                    )
+            )
+
+            if (edge) {
+                traversedEdges.push(edge.id)
+            }
         }
+
+        let latency = 0
+
+        for (const nodeId of path) {
+            const currentNode = nodes.find((node) => node.id.toString() === nodeId.toString())
+
+            if (!currentNode) {
+                continue
+            }
+
+            latency += 10 + Math.floor(Math.random() * 40)
+
+            if (currentNode.data.status === 'WARNING') {
+                latency += 150
+            }
+
+            if (currentNode.data.status === 'OFFLINE') {
+                const timeStamp = new Date().toLocaleTimeString()
+
+                setLogs((prev) => [
+                    `[${timeStamp}] Route failed. Node ${currentNode.data.label} is OFFLINE`,
+                    ...prev
+                ])
+
+                return
+            }
+        }
+
+        setActiveEdges(traversedEdges)
+        setTimeout(() => {
+            setActiveEdges([])
+        }, latency + 500)
 
         const failed = targetNode.data.status === 'OFFLINE'
 
@@ -305,7 +389,7 @@ function NetworksPage() {
             log = `[${timeStamp}] Request timed out for ${targetNode.data.ip}`
             setEdgeStatus('failed')
         } else {
-            log = `[${timeStamp}] Reply from ${targetNode.data.ip}: time=${latency}ms`
+            log = `[${timeStamp}] Route: ${path.join(' → ')} Reply from ${targetNode.data.ip} time=${latency}ms`
             setEdgeStatus('success')
         }
 
@@ -526,12 +610,12 @@ function NetworksPage() {
     }, [nodes])
 
     const animatedEdges = edges.map((edge) => {
-        if (edge.id === activeEdge) {
+        if (activeEdges.includes(edge.id)) {
             return {
                 ...edge,
                 animated: true,
                 style: {
-                    stroke: edgeStatus === 'failed'  ? '#ef4444' : '#22c55e',
+                    stroke: edgeStatus === 'failed' ? '#ef4444' : '#22c55e',
                     strokeWidth: 4
                 }
             }
