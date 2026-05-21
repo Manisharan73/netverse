@@ -200,3 +200,9 @@ input:focus {
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+.navbar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}

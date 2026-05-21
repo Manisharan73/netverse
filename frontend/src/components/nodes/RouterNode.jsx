@@ -2,7 +2,7 @@ import { Handle, Position } from 'reactflow'
 
 function RouterNode({ data }) {
     return(
-        <div className="custom-node router-node">
+        <div className={`custom-node router-node ${data.status?.toLowerCase()}`}>
             <Handle 
                 type='target'
                 position={Position.Left}
@@ -16,8 +16,10 @@ function RouterNode({ data }) {
                 <p>{data.label}</p>
 
                 <span className="node-ip">
-                    192.168.1.1
+                    {data.ip}
                 </span>
+
+                <span className={`status-dot ${data.status?.toLowerCase()}`}> </span>
             </div>
 
             <Handle 

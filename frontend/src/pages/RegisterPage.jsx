@@ -24,7 +24,7 @@ function RegisterPage() {
             console.error(err)
 
             alert(
-                error.response?.data?.error ||
+                err.response?.data?.error ||
                 "Registration failed"
             )
         }

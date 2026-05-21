@@ -12,19 +12,19 @@ async function registerUser(data) {
     const { username, email, password } = data
 
     const existingUser = await User.findOne({
-        where: {email}
+        where: { email }
     })
 
-    if(existingUser) {
+    if (existingUser) {
         throw new Error('User already exists!')
     }
 
     const hashedPassword = await bcrypt.hash(password, 10)
 
     const safeUser = await User.create({
-        id: user.id,
         username,
         email,
+        password: hashedPassword
     })
 
     return safeUser
@@ -46,13 +46,13 @@ async function loginUser(data) {
         }
     })
 
-    if(!user) {
+    if (!user) {
         throw new Error('Invalid credentials!')
     }
 
     const isPasswordValid = await bcrypt.compare(data.password, user.password)
 
-    if(!isPasswordValid) {
+    if (!isPasswordValid) {
         throw new Error('Invalid credentials!')
     }
 

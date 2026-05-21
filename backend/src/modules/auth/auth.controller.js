@@ -5,7 +5,7 @@ const {
 
 async function register(req, res) {
     try {
-        const user = await register(req.body)
+        const user = await registerUser(req.body)
 
         res.status(201).json({
             message: "User registered successfully!",

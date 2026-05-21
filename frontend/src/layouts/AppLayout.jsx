@@ -1,14 +1,14 @@
 import Navbar from "../components/layout/Navbar"
 import Sidebar from '../components/layout/Sidebar'
 
-function AppLayout({ children }) {
+function AppLayout({ children, saveStatus }) {
     return(
         <>
             <div className="app-layout">
                 <Sidebar />
 
                 <div className="main-content">
-                    <Navbar />
+                    <Navbar saveStatus={ saveStatus }/>
 
                     <div className="page-content">
                         {children}

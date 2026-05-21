@@ -1,8 +1,8 @@
 import { Handle, Position } from 'reactflow'
 
 function ServerNode({ data }) {
-    return(
-        <div className="custom-node server-node">
+    return (
+        <div className={`custom-node server-node ${data.status?.toLowerCase()}`}>
             <Handle
                 type="target"
                 position={Position.Left}
@@ -16,8 +16,20 @@ function ServerNode({ data }) {
                 <p>{data.label}</p>
 
                 <span className="node-ip">
-                    10.0.0.25
+                    {data.ip}
                 </span>
+
+                <div className="server-metrics">
+                    <small>
+                        CPU: {data.cpu}
+                    </small>
+
+                    <small>
+                        RAM: {data.ram}
+                    </small>
+                </div>
+
+                <span className={`status-dot ${data.status?.toLowerCase()}`}></span>
             </div>
 
             <Handle

@@ -1,6 +1,6 @@
 import useAuthStore from '../../stores/auth.store'
 
-function Navbar() {
+function Navbar({ saveStatus }) {
     const logout = useAuthStore((state) => state.logout)
 
     return(
@@ -8,9 +8,15 @@ function Navbar() {
             <div className="navbar">
                 <h3>Realtime Internet Simulator</h3>
 
-                <button onClick={logout}>
-                    Logout
-                </button>
+                <div className="navbar-right">
+                    <span className="save-status">
+                        {saveStatus}
+                    </span>
+
+                    <button onClick={logout}>
+                        Logout
+                    </button>
+                </div>
             </div>
         </>
     )
