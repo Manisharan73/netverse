@@ -67,6 +67,7 @@ function NetworksPage() {
     const [pingTarget, setPingTarget] = useState('')
     const [activeEdges, setActiveEdges] = useState([])
     const [edgeStatus, setEdgeStatus] = useState('success')
+    const [routingTable, setRoutingTable] = useState([])
 
     const terminalRef = useRef(null)
 
@@ -135,7 +136,9 @@ function NetworksPage() {
                 status: 'ONLINE',
                 ip: '192.168.1.1',
                 os: 'Cisco IOS',
-                uptime: '12 days'
+                uptime: '12 days',
+                subnet: '192.168.1.0/24',
+                gateway: '192.168.1.1'
             },
 
             type: 'routerNode',
@@ -164,7 +167,9 @@ function NetworksPage() {
                 ip: '10.0.0.25',
                 cpu: '32%',
                 ram: '58%',
-                storage: '71%'
+                storage: '71%',
+                subnet: '10.0.0.0/24',
+                gateway: '10.0.0.1'
             },
 
             type: 'serverNode',
@@ -289,6 +294,16 @@ function NetworksPage() {
         return null
     }
 
+    function isValidIp(ip) {
+        const regex = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
+
+        return regex.test(ip);
+    }
+
+    function getSubnet(ip) {
+        return ip.split('.').slice(0, 3).join('.')
+    }
+
     function pingNode() {
         if (!selectedNode || !pingTarget) {
             return
@@ -297,6 +312,17 @@ function NetworksPage() {
         const targetNode = nodes.find((node) => node.id.toString() === pingTarget.toString())
 
         if (!targetNode) {
+            return
+        }
+
+        if(!isValidIp(selectedNode.data.ip) || !isValidIp(targetNode.data.ip)) {
+            const timeStamp = new Date().toLocaleTimeString()
+
+            setLogs((prev) => [
+                `[${timeStamp}] Invalid IP configuration`,
+                ...prev
+            ])
+
             return
         }
 
@@ -310,6 +336,28 @@ function NetworksPage() {
 
             setLogs((prev) => [
                 `[${timestamp}] Destination unreachable`,
+                ...prev
+            ])
+
+            return
+        }
+
+        const containsRouter = path.some((nodeId) => {
+            const node = nodes.find((n) => n.id.toString() === nodeId.toString())
+
+            return node?.type === 'routerNode'
+        })
+
+        const sourceSubnet = getSubnet(selectedNode.data.ip)
+        const targetSubnet = getSubnet(targetNode.data.ip)
+
+        const sameSubnet = sourceSubnet === targetSubnet
+
+        if(!sameSubnet && !containsRouter) {
+            const timeStamp = new Date().toLocaleTimeString()
+
+            setLogs((prev) => [
+                `[${timeStamp}] No router available for cross-network routing`,
                 ...prev
             ])
 
@@ -389,7 +437,7 @@ function NetworksPage() {
             log = `[${timeStamp}] Request timed out for ${targetNode.data.ip}`
             setEdgeStatus('failed')
         } else {
-            log = `[${timeStamp}] Route: ${path.join(' → ')} Reply from ${targetNode.data.ip} time=${latency}ms`
+            log = `[${timeStamp}] Route: ${path.join(' → ')} Network: ${sameSubnet ? 'Local Network' : 'Cross Network Routing'} Reply from ${targetNode.data.ip} time=${latency}ms`
             setEdgeStatus('success')
         }
 
@@ -435,6 +483,8 @@ function NetworksPage() {
     ).length
 
     const connectionCount = edges.length
+
+    const healthScore = Math.max(0, 100 - (offlineCount * 25 + warningCount * 10))
 
     useEffect(() => {
         socket.on('connect', () => {
@@ -637,6 +687,22 @@ function NetworksPage() {
         }
     })
 
+    useEffect(() => {
+        const routes = []
+
+        nodes.forEach((node) => {
+            routes.push({
+                node: node.data.label,
+                ip: node.data.ip,
+                subnet: node.data.subnet,
+                gateway: node.data.gateway,
+                status: node.data.status
+            })
+        })
+
+        setRoutingTable(routes)
+    }, [nodes])
+
     return (
         <AppLayout saveStatus={saveStatus}>
 
@@ -669,6 +735,11 @@ function NetworksPage() {
                 <div className="stat-card">
                     <h3>{warningCount}</h3>
                     <p>Warning</p>
+                </div>
+
+                <div className="stat-card">
+                    <h3>{healthScore}</h3>
+                    <p>Network Health</p>
                 </div>
             </div>
 
@@ -776,6 +847,62 @@ function NetworksPage() {
                             />
                         </p>
 
+                        <p>
+                            Subnet:
+
+                            <input
+                                type='text'
+                                value={selectedNode.data.subnet || ''}
+                                onChange={(e) => {
+                                    const updatedSubnet = e.target.value
+
+                                    setNodes((nodes) =>
+                                        nodes.map((node) => {
+                                            if (node.id.toString() === selectedNode.id.toString()) {
+                                                return {
+                                                    ...node,
+                                                    data: {
+                                                        ...node.data,
+                                                        subnet: updatedSubnet
+                                                    }
+                                                }
+                                            }
+
+                                            return node
+                                        })
+                                    )
+                                }}
+                            />
+                        </p>
+
+                        <p>
+                            Gateway:
+
+                            <input
+                                type='text'
+                                value={selectedNode.data.gateway || ''}
+                                onChange={(e) => {
+                                    const updatedGateway = e.target.value;
+
+                                    setNodes((nodes) =>
+                                        nodes.map((node) => {
+                                            if (node.id.toString() === selectedNode.id.toString) {
+                                                return {
+                                                    ...node,
+                                                    data: {
+                                                        ...node.data,
+                                                        gateway: updatedGateway
+                                                    }
+                                                }
+                                            }
+
+                                            return node
+                                        })
+                                    )
+                                }}
+                            />
+                        </p>
+
                         {
                             selectedNode.type === 'routerNode' && (
                                 <>
@@ -877,6 +1004,47 @@ function NetworksPage() {
                 </div>
             </div>
 
+            <div className="routing-panel">
+                    <div className="routing-header">
+                        Routing Table
+                    </div>
+
+                    <div className="routing-body">
+                        {
+                            routingTable.map((route, index) => (
+                                <div
+                                    key={index}
+                                    className='route-card'
+                                >
+                                    <p>
+                                        <strong>Node:</strong>
+                                        {route.node}
+                                    </p>
+
+                                    <p>
+                                        <strong>IP:</strong>
+                                        {route.ip}
+                                    </p>
+
+                                    <p>
+                                        <strong>Subnet:</strong>
+                                        {route.subnet}
+                                    </p>
+
+                                    <p>
+                                        <strong>Gateway:</strong>
+                                        {route.gateway}
+                                    </p>
+
+                                    <p>
+                                        <strong>Status:</strong>
+                                        {route.status}
+                                    </p>
+                                </div>
+                            ))
+                        }
+                    </div>
+            </div>
         </AppLayout>
     )
 }
