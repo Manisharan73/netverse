@@ -28,7 +28,12 @@ async function createNetwork(data) {
             await Edge.create({
                 NetworkId: network.id,
                 sourceNodeId: edge.source,
-                targetNodeId: edge.target
+                targetNodeId: edge.target,
+                bandwidth: edge.data?.bandwidth || 100,
+                latency: edge.data?.latency || 10,
+                packetLoss: edge.data?.packetLoss || 0.02,
+                status: edge.data?.status || 'ONLINE',
+                traffic: edge.data?.traffic || 0
             })
         }
     }
@@ -88,7 +93,7 @@ async function updateNetwork(id, data) {
                 ipAddress: node.data.ip || '',
                 posX: node.position.x,
                 posY: node.position.y,
-                status: node.data.status || 'ONLINE'
+                status: 'ONLINE'
             })
         }
     }
@@ -98,7 +103,12 @@ async function updateNetwork(id, data) {
             await Edge.create({
                 NetworkId: id,
                 sourceNodeId: edge.source,
-                targetNodeId: edge.target
+                targetNodeId: edge.target,
+                bandwidth: edge.data?.bandwidth || 100,
+                latency: edge.data?.latency || 10,
+                packetLoss: edge.data?.packetLoss || 0.02,
+                status: edge.data?.status || 'ONLINE',
+                traffic: edge.data?.traffic || 0
             })
         }
     }

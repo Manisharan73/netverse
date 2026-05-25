@@ -1,8 +1,12 @@
 import { Handle, Position } from 'reactflow'
+import useNetworkStore from '../../stores/network.store'
 
-function ServerNode({ data }) {
+function ServerNode({ id, data }) {
+    const nodeMetrics = useNetworkStore((state) => state.nodeMetrics)
+    const metric = nodeMetrics[id] || {}
+
     return (
-        <div className={`custom-node server-node ${data.status?.toLowerCase()}`}>
+        <div className={`custom-node server-node ${metric.status?.toLowerCase() || 'online'}`}>
             <Handle
                 type="target"
                 position={Position.Left}
@@ -21,15 +25,15 @@ function ServerNode({ data }) {
 
                 <div className="server-metrics">
                     <small>
-                        CPU: {data.cpu}
+                        CPU: {metric.cpu || '0%'}
                     </small>
 
                     <small>
-                        RAM: {data.ram}
+                        RAM: {metric.ram || '0%'}
                     </small>
                 </div>
 
-                <span className={`status-dot ${data.status?.toLowerCase()}`}></span>
+                <span className={`status-dot ${metric.status?.toLowerCase() || 'online'}`}></span>
             </div>
 
             <Handle

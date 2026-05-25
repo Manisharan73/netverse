@@ -1,4 +1,4 @@
-import { ReactFlow, MiniMap, Controls, Background, useNodesState, useEdgesState, addEdge } from 'reactflow'
+import { useNodesState, useEdgesState, addEdge } from 'reactflow'
 import 'reactflow/dist/style.css'
 import AppLayout from '../layouts/AppLayout'
 import '../styles/networks.css'
@@ -6,89 +6,145 @@ import RouterNode from '../components/nodes/RouterNode'
 import ServerNode from '../components/nodes/ServerNode'
 import { createNetwork, getNetworkById, updateNetwork } from '../services/network.service'
 import useNetworkStore from '../stores/network.store'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import socket from '../websocket/socket'
+import { v4 as uuidv4 } from 'uuid'
+
+import { INITIAL_NODES, INITIAL_EDGES, DEFAULT_ROUTER_DATA, DEFAULT_ROUTER_METRICS, DEFAULT_SERVER_DATA, DEFAULT_SERVER_METRICS } from '../constants/networkDefaults'
+
+import useNetworkSocket from '../hooks/useNetworkSocket'
+import usePingSimulation from '../hooks/usePingSimulation'
+import useMonitoringSimulation from '../hooks/useMonitoringSimulation'
+import useAutoSave from '../hooks/useAutoSave'
+import useNetworkStats from '../hooks/useNetworkStats'
+import useRoutingTable from '../hooks/useRoutingTable'
+import useRoutingEngine from '../hooks/useRoutingEngine'
+import useTrafficSimulation from '../hooks/useTrafficSimulation'
+
+import ConfigPanel from '../components/network/ConfigPanel'
+import NetworkCanvas from '../components/network/NetworkCanvas'
+import TerminalPanel from '../components/network/TerminalPanel'
+import NetworkToolbar from '../components/network/NetworkToolbar'
+import NetworkStats from '../components/network/NetworkStats'
+import AnalyticsPanel from '../components/network/AnalyticsPanel'
+import AlertsPanel from '../components/network/AlertsPanel'
+import IncidentsPanel from '../components/network/IncidentsPanel'
+import RoutingPanel from '../components/network/RoutingPanel'
+
+import { DEVICE_TEMPLATES } from '../constants/deviceTemplates'
+import { createNodeFromTemplate } from '../utils/createNodeFromTemplate'
 
 const nodeTypes = {
     routerNode: RouterNode,
     serverNode: ServerNode,
 }
 
-const initialNodes = [
-    {
-        id: '1',
-
-        position: {
-            x: 100,
-            y: 100,
-        },
-
-        data: {
-            label: 'Main Router',
-        },
-
-        type: 'routerNode',
-    },
-
-    {
-        id: '2',
-
-        position: {
-            x: 400,
-            y: 200,
-        },
-
-        data: {
-            label: 'Web Server',
-        },
-
-        type: 'serverNode',
-    },
-]
-
-const initialEdges = [
-    {
-        id: 'e1-2',
-
-        source: '1',
-        target: '2',
-
-        animated: true
-    },
-]
-
 function NetworksPage() {
-    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+    const [nodes, setNodes, onNodesChangeReactFlow] = useNodesState(INITIAL_NODES)
+    const [edges, setEdges, onEdgesChangeReactFlow] = useEdgesState(INITIAL_EDGES)
     const [currentNetworkId, setCurrentNetworkId] = useState(null)
     const [selectedNode, setSelectedNode] = useState(null)
+    const [selectedEdge, setSelectedEdge] = useState(null)
     const [saveStatus, setSaveStatus] = useState('Saved')
     const [logs, setLogs] = useState([])
     const [pingTarget, setPingTarget] = useState('')
-    const [activeEdges, setActiveEdges] = useState([])
-    const [edgeStatus, setEdgeStatus] = useState('success')
-    const [routingTable, setRoutingTable] = useState([])
+    const [alerts, setAlerts] = useState([])
+    const [incidents, setIncidents] = useState([])
 
-    const terminalRef = useRef(null)
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState(null)
 
-    function onNodeClick(event, node) {
+    const setCurrentNetwork = useNetworkStore((state) => state.setCurrentNetwork)
+    const nodeMetrics = useNetworkStore((state) => state.nodeMetrics)
+    const setNodeMetrics = useNetworkStore((state) => state.setNodeMetrics)
+    const updateNodeMetricById = useNetworkStore((state) => state.updateNodeMetricById)
+
+    useNetworkSocket({ setNodes, setEdges, setSelectedNode })
+
+    const { graph, getRoute, getRouteLatency } = useRoutingEngine(nodes, edges)
+
+    const { pingNode, activeEdges, edgeStatus } = usePingSimulation({
+        nodes,
+        edges,
+        setEdges,
+        graph,
+        getRoute,
+        getRouteLatency,
+        selectedNode,
+        pingTarget,
+        setLogs
+    })
+
+    useMonitoringSimulation({ nodes, setIncidents, setAlerts })
+
+    useTrafficSimulation(setEdges)
+
+    useAutoSave({ currentNetworkId, nodes, edges, setSaveStatus })
+
+    const stats = useNetworkStats({ nodes, edges, nodeMetrics })
+
+    const { routingTable } = useRoutingTable({
+        nodes,
+        edges,
+        graph,
+        getRoute,
+        getRouteLatency
+    })
+
+    const onNodesChange = useCallback((changes) => {
+        onNodesChangeReactFlow(changes)
+    }, [onNodesChangeReactFlow])
+
+    const onEdgesChange = useCallback((changes) => {
+        changes.forEach(change => {
+            if (change.type === 'remove') {
+                socket.emit('edge:delete', { id: change.id })
+            }
+        })
+        onEdgesChangeReactFlow(changes)
+    }, [onEdgesChangeReactFlow])
+
+    const onNodeClick = useCallback((event, node) => {
         setSelectedNode(node)
-    }
+        setSelectedEdge(null)
+    }, [])
 
-    function onConnect(connection) {
+    const onEdgeClick = useCallback((event, edge) => {
+        setSelectedEdge(edge)
+        setSelectedNode(null)
+    }, [])
+
+    const onConnect = useCallback((connection) => {
+        const exists = edges.some((edge) =>
+            (edge.source === connection.source && edge.target === connection.target)
+
+            ||
+
+            (edge.source === connection.target && edge.target === connection.source)
+        )
+
+        if (exists) {
+            return
+        }
+
         const newEdge = {
             ...connection,
             id: `e${connection.source}-${connection.target}`,
-            animated: true
+            animated: true,
+            type: 'custom',
+
+            data: {
+                bandwidth: 100,
+                latency: 10,
+                packetLoss: 0.02,
+                status: 'ONLINE',
+                traffic: 0
+            }
         }
 
         setEdges((edges) => addEdge(newEdge, edges))
-
         socket.emit('edge:add', newEdge)
-
-    }
-
-    const setCurrentNetwork = useNetworkStore((state) => state.setCurrentNetwork)
+    }, [edges, setEdges])
 
     async function saveNetwork() {
         try {
@@ -100,20 +156,13 @@ function NetworksPage() {
             }
 
             if (currentNetworkId) {
-                await updateNetwork(
-                    currentNetworkId,
-                    networkData
-                )
-
+                await updateNetwork(currentNetworkId, networkData)
                 alert('Netwrok updated!')
             }
             else {
                 const network = await createNetwork(networkData)
-
                 setCurrentNetwork(network)
-
                 setCurrentNetworkId(network.id)
-
                 alert('Network saved!')
             }
         } catch (err) {
@@ -123,26 +172,7 @@ function NetworksPage() {
     }
 
     function addRouter() {
-        const newNode = {
-            id: `${Date.now()}`,
-
-            position: {
-                x: Math.random() * 400,
-                y: Math.random() * 400,
-            },
-
-            data: {
-                label: 'Router',
-                status: 'ONLINE',
-                ip: '192.168.1.1',
-                os: 'Cisco IOS',
-                uptime: '12 days',
-                subnet: '192.168.1.0/24',
-                gateway: '192.168.1.1'
-            },
-
-            type: 'routerNode',
-        }
+        const newNode = createNodeFromTemplate(DEVICE_TEMPLATES.CISCO_ROUTER)
 
         setNodes((nodes) => [
             ...nodes,
@@ -153,27 +183,7 @@ function NetworksPage() {
     }
 
     function addServer() {
-        const newNode = {
-            id: `${Date.now()}`,
-
-            position: {
-                x: Math.random() * 400,
-                y: Math.random() * 400,
-            },
-
-            data: {
-                label: 'Server',
-                status: 'ONLINE',
-                ip: '10.0.0.25',
-                cpu: '32%',
-                ram: '58%',
-                storage: '71%',
-                subnet: '10.0.0.0/24',
-                gateway: '10.0.0.1'
-            },
-
-            type: 'serverNode',
-        }
+        const newNode = createNodeFromTemplate(DEVICE_TEMPLATES.LINUX_SERVER)
 
         setNodes((nodes) => [
             ...nodes,
@@ -183,868 +193,225 @@ function NetworksPage() {
         socket.emit('node:add', newNode)
     }
 
-    async function loadNetwork() {
+    const loadNetwork = useCallback(async () => {
+        setLoading(true)
+        setError(null)
         try {
             const network = await getNetworkById(3)
-
             setCurrentNetworkId(network.id)
 
-            const formattedNodes = network.Nodes.map((node) => ({
-                id: node.frontendId.toString(),
-                type: node.type || 'default',
-                position: {
-                    x: Number(node.posX) || 0,
-                    y: Number(node.posY) || 0,
-                },
-                data: {
-                    label: node.label || 'Node',
+            const formattedNodes = []
+            const parsedMetrics = {}
+
+            network.Nodes.forEach((node) => {
+                const id = node.frontendId.toString()
+                formattedNodes.push({
+                    id,
+                    type: node.type || 'default',
+                    position: { x: Number(node.posX) || 0, y: Number(node.posY) || 0 },
+                    data: {
+                        label: node.label || 'Node', ip: node.ip || '', subnet: node.subnet || '', gateway: node.gateway || '', os: node.os || ''
+                    }
+                })
+
+                parsedMetrics[id] = {
+                    status: node.status || 'ONLINE', cpu: node.cpu || '0%', ram: node.ram || '0%', storage: node.storage || '0%', traffic: node.traffic || 0, packetsSent: node.packetsSent || 0, packetsReceived: node.packetsReceived || 0, packetLoss: node.packetLoss || 0, uptime: node.uptime || '', services: node.services || []
                 }
-            }))
+            })
 
             const formattedEdges = network.Edges.map((edge) => ({
                 id: edge.id.toString(),
                 source: edge.sourceNodeId.toString(),
                 target: edge.targetNodeId.toString(),
-                animated: true
+                animated: true,
+                type: 'custom',
+
+                data: {
+                    bandwidth: edge.bandwidth || 100,
+                    latency: edge.latency || 10,
+                    packetLoss: edge.packetLoss || 0.02,
+                    status: edge.status || 'ONLINE',
+                    traffic: edge.traffic || 0
+                }
             }))
-
-
 
             setNodes(formattedNodes)
             setEdges(formattedEdges)
+            setNodeMetrics(parsedMetrics)
         } catch (err) {
             console.error(err)
-            alert('Failed to load network!')
+            setError('Failed to load network!')
+        } finally {
+            setLoading(false)
         }
-    }
+    }, [setCurrentNetworkId, setNodes, setEdges, setNodeMetrics])
 
-    function deleteSelectedNode() {
-        if (!selectedNode) {
-            return
-        }
+    const deleteSelectedNode = useCallback(() => {
+        if (!selectedNode) return
 
         setEdges((edges) =>
-            edges.filter((edge) => {
-
-                return (
-
-                    edge.source.toString() !==
-                    selectedNode.id.toString()
-
-                    &&
-
-                    edge.target.toString() !==
-                    selectedNode.id.toString()
-                )
-            })
+            edges.filter((edge) =>
+                edge.source.toString() !== selectedNode.id.toString() &&
+                edge.target.toString() !== selectedNode.id.toString()
+            )
         )
 
         setNodes((nodes) =>
-            nodes.filter((node) =>
-
-                node.id.toString() !==
-                selectedNode.id.toString()
-            )
+            nodes.filter((node) => node.id.toString() !== selectedNode.id.toString())
         )
 
         socket.emit('node:delete', { id: selectedNode.id })
-
         setSelectedNode(null)
-    }
+    }, [selectedNode, setEdges, setNodes])
 
-    function findPath(startId, targetId) {
-        const adjacency = {}
-
-        edges.forEach((edge) => {
-            if (!adjacency[edge.source]) {
-                adjacency[edge.source] = []
-            }
-
-            if (!adjacency[edge.target]) {
-                adjacency[edge.target] = []
-            }
-
-            adjacency[edge.source].push(edge.target)
-            adjacency[edge.target].push(edge.source)
+    const onNodeDragStop = useCallback((event, node) => {
+        socket.emit('node:move', {
+            id: node.id,
+            position: { x: node.position.x, y: node.position.y }
         })
+    }, [])
 
-        const queue = [[startId]]
-
-        const visited = new Set()
-
-        while (queue.length > 0) {
-            const path = queue.shift()
-            const node = path[path.length - 1]
-
-            if (node === targetId) {
-                return path
+    const updateServiceStatus = useCallback((nodeId, serviceId, newStatus) => {
+        updateNodeMetricById(nodeId, (metric) => {
+            return {
+                ...metric,
+                services: (metric.services || []).map((service) => {
+                    if (service.id !== serviceId) return service
+                    return { ...service, status: newStatus }
+                })
             }
-
-            if (!visited.has(node)) {
-                visited.add(node)
-
-                const neighbors = adjacency[node] || []
-
-                for (const neighbor of neighbors) {
-                    queue.push([...path, neighbor])
-                }
-            }
-        }
-
-        return null
-    }
-
-    function isValidIp(ip) {
-        const regex = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
-
-        return regex.test(ip);
-    }
-
-    function getSubnet(ip) {
-        return ip.split('.').slice(0, 3).join('.')
-    }
-
-    function pingNode() {
-        if (!selectedNode || !pingTarget) {
-            return
-        }
-
-        const targetNode = nodes.find((node) => node.id.toString() === pingTarget.toString())
-
-        if (!targetNode) {
-            return
-        }
-
-        if(!isValidIp(selectedNode.data.ip) || !isValidIp(targetNode.data.ip)) {
-            const timeStamp = new Date().toLocaleTimeString()
-
-            setLogs((prev) => [
-                `[${timeStamp}] Invalid IP configuration`,
-                ...prev
-            ])
-
-            return
-        }
-
-        const path = findPath(
-            selectedNode.id,
-            targetNode.id
-        )
-
-        if (!path) {
-            const timestamp = new Date().toLocaleTimeString()
-
-            setLogs((prev) => [
-                `[${timestamp}] Destination unreachable`,
-                ...prev
-            ])
-
-            return
-        }
-
-        const containsRouter = path.some((nodeId) => {
-            const node = nodes.find((n) => n.id.toString() === nodeId.toString())
-
-            return node?.type === 'routerNode'
         })
+    }, [updateNodeMetricById])
 
-        const sourceSubnet = getSubnet(selectedNode.data.ip)
-        const targetSubnet = getSubnet(targetNode.data.ip)
-
-        const sameSubnet = sourceSubnet === targetSubnet
-
-        if(!sameSubnet && !containsRouter) {
-            const timeStamp = new Date().toLocaleTimeString()
-
-            setLogs((prev) => [
-                `[${timeStamp}] No router available for cross-network routing`,
-                ...prev
-            ])
-
-            return
-        }
-
-        const traversedEdges = []
-
-        for (let i = 0; i < path.length - 1; i++) {
-            const source = path[i]
-
-            const target = path[i + 1]
-
-            const edge = edges.find(
-                (edge) =>
-                    (
-                        edge.source.toString() === source.toString()
-                        &&
-                        edge.target.toString() === target.toString()
-                    )
-
-                    ||
-
-                    (
-                        edge.source.toString() === target.toString()
-                        &&
-                        edge.target.toString() === source.toString()
-                    )
-            )
-
-            if (edge) {
-                traversedEdges.push(edge.id)
-            }
-        }
-
-        let latency = 0
-
-        for (const nodeId of path) {
-            const currentNode = nodes.find((node) => node.id.toString() === nodeId.toString())
-
-            if (!currentNode) {
-                continue
-            }
-
-            latency += 10 + Math.floor(Math.random() * 40)
-
-            if (currentNode.data.status === 'WARNING') {
-                latency += 150
-            }
-
-            if (currentNode.data.status === 'OFFLINE') {
-                const timeStamp = new Date().toLocaleTimeString()
-
-                setLogs((prev) => [
-                    `[${timeStamp}] Route failed. Node ${currentNode.data.label} is OFFLINE`,
-                    ...prev
-                ])
-
-                return
-            }
-        }
-
-        setActiveEdges(traversedEdges)
+    const restartService = useCallback((nodeId, serviceId) => {
+        updateServiceStatus(nodeId, serviceId, 'RESTARTING')
         setTimeout(() => {
-            setActiveEdges([])
-        }, latency + 500)
-
-        const failed = targetNode.data.status === 'OFFLINE'
-
-        const packetLoss = Math.random() < 0.2
-
-        const timeStamp = new Date().toLocaleTimeString()
-
-        let log = ''
-
-        if (failed || packetLoss) {
-            log = `[${timeStamp}] Request timed out for ${targetNode.data.ip}`
-            setEdgeStatus('failed')
-        } else {
-            log = `[${timeStamp}] Route: ${path.join(' → ')} Network: ${sameSubnet ? 'Local Network' : 'Cross Network Routing'} Reply from ${targetNode.data.ip} time=${latency}ms`
-            setEdgeStatus('success')
-        }
-
-        setLogs((prev) => [
-            log,
-            ...prev
-        ])
-    }
-
-    function onNodeDragStop(event, node) {
-        socket.emit(
-            'node:move',
-            {
-                id: node.id,
-                position: {
-                    x: node.position.x,
-                    y: node.position.y
-                }
-            }
-        )
-
-        console.log('Emitted')
-    }
-
-    const routerCount = nodes.filter(
-        (node) => node.type === 'routerNode'
-    ).length
-
-    const serverCount = nodes.filter(
-        (node) => node.type === 'serverNode'
-    ).length
-
-    const onlineCount = nodes.filter(
-        (node) => node.data.status === 'ONLINE'
-    ).length
-
-    const offlineCount = nodes.filter(
-        (node) => node.data.status === 'OFFLINE'
-    ).length
-
-    const warningCount = nodes.filter(
-        (node) => node.data.status === 'WARNING'
-    ).length
-
-    const connectionCount = edges.length
-
-    const healthScore = Math.max(0, 100 - (offlineCount * 25 + warningCount * 10))
-
-    useEffect(() => {
-        socket.on('connect', () => {
-            console.log('Connected: ', socket.id)
-        })
-
-        socket.on('node:added', (node) => {
-            setNodes((nodes) => [
-                ...nodes,
-                node
-            ])
-        })
-
-        socket.on('node:moved', (data) => {
-            setNodes((currentNodes) =>
-                currentNodes.map((node) => {
-                    if (node.id.toString() === data.id.toString()) {
-                        return {
-                            ...node,
-                            position: {
-                                x: Number(data.position.x),
-                                y: Number(data.position.y)
-                            }
-                        }
-                    }
-
-                    return node
-                })
-            )
-        }
-        )
-
-        socket.on('edge:added', (edge) => {
-            setEdges((edges) => addEdge(edge, edges))
-        })
-
-        socket.on('node:deleted', (data) => {
-            setEdges((edges) =>
-                edges.filter((edge) =>
-                    edge.source.toString() !== data.id.toString
-                    &&
-                    edge.target.toString() !== data.id.toString()
-                )
-            )
-
-            setNodes((nodes) =>
-                nodes.filter((node) => node.id.toString() !== data.id.toString())
-            )
-        })
-
-        socket.on(
-            'node:labelUpdated',
-            (data) => {
-                setNodes((currentNodes) =>
-                    currentNodes.map((node) => {
-                        if (node.id.toString() === data.id.toString()) {
-                            return {
-                                ...node,
-                                data: {
-                                    ...node.data,
-                                    label: data.label
-                                }
-                            }
-                        }
-
-                        return node
-                    })
-                )
-
-                setSelectedNode((prev) => {
-                    if (!prev || prev.id.toString() !== data.id.toString()) {
-                        return prev
-                    }
-
-                    return {
-                        ...prev,
-                        data: {
-                            ...prev.data,
-                            label: data.label
-                        }
-                    }
-                })
-            }
-        )
-
-        return () => {
-            socket.off('connect')
-            socket.off('node:added')
-            socket.off('node:moved')
-            socket.off('edge:added')
-            socket.off('node:deleted')
-            socket.off('node:updatedLabel')
-        }
-    }, [])
-
-    useEffect(() => {
-        if (!currentNetworkId) {
-            return
-        }
-
-        setSaveStatus('Saving...')
-
-        const timeOut = setTimeout(async () => {
-            try {
-                await updateNetwork(
-                    currentNetworkId,
-                    {
-                        name: 'My Infrastructure',
-                        description: 'NetVerse Topology',
-                        nodes,
-                        edges
-                    }
-                )
-
-                setSaveStatus('Saved')
-            } catch (err) {
-                console.error(err)
-                setSaveStatus('Error')
-            }
-        }, 1500)
-
-        return () => clearTimeout(timeOut)
-    }, [nodes, edges])
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setNodes((currentNodes) =>
-                currentNodes.map((node) => {
-                    if (node.type !== 'serverNode') {
-                        return node
-                    }
-
-                    const cpu = Math.floor(Math.random() * 100)
-                    const ram = Math.floor(Math.random() * 100)
-                    const storage = Math.floor(Math.random() * 100)
-                    let status = 'ONLINE'
-
-                    if (cpu > 85 || ram > 90) {
-                        status = 'WARNING'
-                    }
-
-                    if (cpu > 95) {
-                        status = 'OFFLINE'
-                    }
-
-                    return {
-                        ...node,
-                        data: {
-                            ...node.data,
-                            cpu: `${cpu}%`,
-                            ram: `${ram}%`,
-                            storage: `${storage}%`,
-                            status
-                        }
-                    }
-                })
-            )
+            updateServiceStatus(nodeId, serviceId, 'RUNNING')
         }, 3000)
+    }, [updateServiceStatus])
 
-        return () => clearInterval(interval)
-    }, [])
+    const deployUpdate = useCallback((nodeId) => {
+        setLogs((prev) => [`[DEPLOYMENT] Starting deployment...`, ...prev])
+        updateServiceStatus(nodeId, 1, 'RESTARTING')
+        updateServiceStatus(nodeId, 2, 'RESTARTING')
+
+        setTimeout(() => {
+            updateServiceStatus(nodeId, 1, 'RUNNING')
+            updateServiceStatus(nodeId, 2, 'RUNNING')
+            setLogs((prev) => [`[DEPLOYMENT] Deployment successful`, ...prev])
+        }, 5000)
+    }, [updateServiceStatus])
 
     useEffect(() => {
-        if (!selectedNode) {
-            return
-        }
-
+        if (!selectedNode) return
         const updatedNode = nodes.find((node) => node.id.toString() === selectedNode.id.toString())
+        if (updatedNode) setSelectedNode(updatedNode)
+    }, [nodes, selectedNode])
 
-        if (updatedNode) {
-            setSelectedNode(updatedNode)
-        }
-    }, [nodes])
+    const animatedEdges = useMemo(() => {
+        return edges.map((edge) => {
+            const sourceNode = nodes.find((node) => node.id.toString() === edge.source.toString())
+            const targetNode = nodes.find((node) => node.id.toString() === edge.target.toString())
 
-    const animatedEdges = edges.map((edge) => {
-        if (activeEdges.includes(edge.id)) {
+            const edgeData = edge.data || {}
+
+            const relatedTraffic = edgeData.traffic || 0
+
+            let edgeWidth = Math.min(8, 2 + relatedTraffic / 25)
+
+            let edgeColor = '#22c55e'
+
+            if (relatedTraffic > 70) {
+                edgeColor = '#f59e0b'
+            }
+
+            if (relatedTraffic > 120) {
+                edgeColor = '#ef4444'
+            }
+
+            if (edgeData.status === 'OFFLINE') {
+                edgeColor = '#991b1b'
+                edgeWidth = 4
+            }
+
+            if (activeEdges.includes(edge.id)) {
+                edgeColor = edgeStatus === 'failed' ? '#ef4444' : '#22c55e'
+                edgeWidth = 5
+            }
+
+            const sourceMetric = sourceNode ? (nodeMetrics[sourceNode.id] || {}) : {}
+            const targetMetric = targetNode ? (nodeMetrics[targetNode.id] || {}) : {}
+
+            if (sourceMetric.status === 'OFFLINE' || targetMetric.status === 'OFFLINE') {
+                edgeColor = '#991b1b'
+                edgeWidth = 4
+            }
+
             return {
                 ...edge,
-                animated: true,
+                type: 'custom',
+                animated: edgeData.status !== 'OFFLINE',
+
                 style: {
-                    stroke: edgeStatus === 'failed' ? '#ef4444' : '#22c55e',
-                    strokeWidth: 4
+                    stroke: edgeColor,
+                    strokeWidth: edgeWidth
                 }
             }
-        }
-
-        return {
-            ...edge,
-            animated: true,
-            style: {
-                stroke: '#64748b',
-                strokeWidth: 2
-            }
-        }
-    })
-
-    useEffect(() => {
-        if (terminalRef.current) {
-            terminalRef.current.scrollTop = 0
-        }
-    })
-
-    useEffect(() => {
-        const routes = []
-
-        nodes.forEach((node) => {
-            routes.push({
-                node: node.data.label,
-                ip: node.data.ip,
-                subnet: node.data.subnet,
-                gateway: node.data.gateway,
-                status: node.data.status
-            })
         })
-
-        setRoutingTable(routes)
-    }, [nodes])
+    }, [edges, nodes, activeEdges, edgeStatus, nodeMetrics])
 
     return (
         <AppLayout saveStatus={saveStatus}>
+            {loading && <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div className="text-white text-xl">Loading...</div></div>}
+            {error && <div className="absolute top-4 right-4 bg-red-500 text-white p-3 rounded z-50">{error}</div>}
 
-            <div className="stats-grid">
-                <div className="stat-card">
-                    <h3>{routerCount}</h3>
-                    <p>Routers</p>
-                </div>
+            <NetworkStats {...stats} />
 
-                <div className="stat-card">
-                    <h3>{serverCount}</h3>
-                    <p>Servers</p>
-                </div>
+            <AnalyticsPanel nodes={nodes} />
 
-                <div className="stat-card">
-                    <h3>{connectionCount}</h3>
-                    <p>Connections</p>
-                </div>
+            <NetworkToolbar
+                addRouter={addRouter}
+                addServer={addServer}
+                saveNetwork={saveNetwork}
+                loadNetwork={loadNetwork}
+            />
 
-                <div className="stat-card">
-                    <h3>{onlineCount}</h3>
-                    <p>Online</p>
-                </div>
+            <ConfigPanel
+                selectedNode={selectedNode}
+                selectedEdge={selectedEdge}
+                nodes={nodes}
+                setNodes={setNodes}
+                setEdges={setEdges}
+                setSelectedNode={setSelectedNode}
+                setSelectedEdge={setSelectedEdge}
+                pingTarget={pingTarget}
+                setPingTarget={setPingTarget}
+                pingNode={pingNode}
+                deleteSelectedNode={deleteSelectedNode}
+                updateServiceStatus={updateServiceStatus}
+                restartService={restartService}
+                deployUpdate={deployUpdate}
+            />
 
-                <div className="stat-card">
-                    <h3>{offlineCount}</h3>
-                    <p>Offline</p>
-                </div>
+            <NetworkCanvas
+                nodes={nodes}
+                edges={animatedEdges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                nodeTypes={nodeTypes}
+                onNodeClick={onNodeClick}
+                onEdgeClick={onEdgeClick}
+                onNodeDragStop={onNodeDragStop}
+            />
 
-                <div className="stat-card">
-                    <h3>{warningCount}</h3>
-                    <p>Warning</p>
-                </div>
+            <TerminalPanel logs={logs} />
 
-                <div className="stat-card">
-                    <h3>{healthScore}</h3>
-                    <p>Network Health</p>
-                </div>
-            </div>
+            <IncidentsPanel incidents={incidents} />
 
-            <div className="network-toolbar">
+            <AlertsPanel alerts={alerts} />
 
-                <button onClick={addRouter}>
-                    Add Router
-                </button>
-
-                <button onClick={addServer}>
-                    Add Server
-                </button>
-
-                <button onClick={saveNetwork}>
-                    Save Network
-                </button>
-
-                <button onClick={loadNetwork}>
-                    Load Network
-                </button>
-
-            </div>
-
-            {
-                selectedNode && (
-                    <div className="config-panel">
-                        <h3>Node Configuration</h3>
-
-                        <p>Type: {selectedNode.type}</p>
-
-                        <p>
-                            Label: <input
-                                type='text'
-                                value={selectedNode.data.label}
-                                onChange={(e) => {
-                                    const updatedLabel = e.target.value
-
-                                    setNodes((nodes) =>
-                                        nodes.map((node) => {
-                                            if (node.id === selectedNode.id) {
-                                                return {
-                                                    ...node,
-                                                    data: {
-                                                        ...node.data,
-                                                        label: updatedLabel
-                                                    }
-                                                }
-                                            }
-
-                                            return node
-                                        })
-                                    )
-
-                                    setSelectedNode((prev) => ({
-                                        ...prev,
-                                        data: {
-                                            ...prev.data,
-                                            label: updatedLabel
-                                        }
-                                    }))
-
-                                    socket.emit(
-                                        'node:updateLabel',
-                                        {
-                                            id: selectedNode.id,
-                                            label: updatedLabel
-                                        }
-                                    )
-                                }}
-                            />
-                        </p>
-
-                        <p>
-                            IP Address:
-                            <input
-                                type="text"
-                                value={selectedNode.data.ip || ''}
-                                onChange={(e) => {
-                                    const updatedIp = e.target.value
-
-                                    setNodes((nodes) =>
-                                        nodes.map((node) => {
-                                            if (node.id === selectedNode.id) {
-                                                return {
-                                                    ...node,
-                                                    data: {
-                                                        ...node.data,
-                                                        ip: updatedIp
-                                                    }
-                                                }
-                                            }
-
-                                            return node
-                                        })
-                                    )
-
-                                    setSelectedNode((prev) => ({
-                                        ...prev,
-                                        data: {
-                                            ...prev.data,
-                                            ip: updatedIp
-                                        }
-                                    }))
-                                }}
-                            />
-                        </p>
-
-                        <p>
-                            Subnet:
-
-                            <input
-                                type='text'
-                                value={selectedNode.data.subnet || ''}
-                                onChange={(e) => {
-                                    const updatedSubnet = e.target.value
-
-                                    setNodes((nodes) =>
-                                        nodes.map((node) => {
-                                            if (node.id.toString() === selectedNode.id.toString()) {
-                                                return {
-                                                    ...node,
-                                                    data: {
-                                                        ...node.data,
-                                                        subnet: updatedSubnet
-                                                    }
-                                                }
-                                            }
-
-                                            return node
-                                        })
-                                    )
-                                }}
-                            />
-                        </p>
-
-                        <p>
-                            Gateway:
-
-                            <input
-                                type='text'
-                                value={selectedNode.data.gateway || ''}
-                                onChange={(e) => {
-                                    const updatedGateway = e.target.value;
-
-                                    setNodes((nodes) =>
-                                        nodes.map((node) => {
-                                            if (node.id.toString() === selectedNode.id.toString) {
-                                                return {
-                                                    ...node,
-                                                    data: {
-                                                        ...node.data,
-                                                        gateway: updatedGateway
-                                                    }
-                                                }
-                                            }
-
-                                            return node
-                                        })
-                                    )
-                                }}
-                            />
-                        </p>
-
-                        {
-                            selectedNode.type === 'routerNode' && (
-                                <>
-                                    <p>OS: {selectedNode.data.os}</p>
-                                    <p> Uptime: {selectedNode.data.uptime}</p>
-                                </>
-                            )
-                        }
-
-                        {
-                            selectedNode.type === 'serverNode' && (
-                                <>
-                                    <p>CPU: {selectedNode.data.cpu}</p>
-                                    <p>RAM: {selectedNode.data.ram}</p>
-                                    <p>Storage: {selectedNode.data.storage}</p>
-                                </>
-                            )
-                        }
-
-                        <p>Node ID: {selectedNode.id}</p>
-
-                        <select
-                            value={pingTarget}
-                            onChange={(e) => setPingTarget(e.target.value)}
-                        >
-                            <option value=''>Select Target</option>
-
-                            {
-                                nodes.filter(
-                                    (node) => node.id.toString() !== selectedNode.id.toString()
-                                ).map((node) => (
-                                    <option
-                                        key={node.id}
-                                        value={node.id}
-                                    >
-                                        {node.data.label}
-                                    </option>
-                                ))
-                            }
-                        </select>
-
-                        <button onClick={pingNode}>Ping Node</button>
-
-                        <button onClick={deleteSelectedNode}>Delete Node</button>
-                    </div>
-                )
-            }
-
-            <div className="network-canvas">
-
-                <ReactFlow
-                    nodes={nodes}
-                    edges={animatedEdges}
-                    onNodesChange={onNodesChange}
-                    onEdgesChange={onEdgesChange}
-                    onConnect={onConnect}
-                    nodeTypes={nodeTypes}
-                    onNodeClick={onNodeClick}
-                    onNodeDragStop={onNodeDragStop}
-                    fitView
-                >
-
-                    <MiniMap
-                        nodeColor={(node) => {
-                            switch (node.type) {
-                                case 'routerNode': return '#2563eb'
-
-                                case 'serverNode': return '#16a34a'
-
-                                default: return '#6b7280'
-                            }
-                        }}
-                    />
-
-                    <Controls />
-
-                    <Background />
-
-                </ReactFlow>
-
-            </div>
-
-            <div className="terminal-panel">
-                <div className="terminal-header">
-                    Network Terminal
-                </div>
-
-                <div className="terminal-body" ref={terminalRef}>
-                    {
-                        logs.map((log, index) => (
-                            <div
-                                key={index}
-                                className={`terminal-line ${log.includes('timed out') ? 'terminal-error' : 'terminal-success'}`}
-                            >
-                                {log}
-                            </div>
-                        ))
-                    }
-                </div>
-            </div>
-
-            <div className="routing-panel">
-                    <div className="routing-header">
-                        Routing Table
-                    </div>
-
-                    <div className="routing-body">
-                        {
-                            routingTable.map((route, index) => (
-                                <div
-                                    key={index}
-                                    className='route-card'
-                                >
-                                    <p>
-                                        <strong>Node:</strong>
-                                        {route.node}
-                                    </p>
-
-                                    <p>
-                                        <strong>IP:</strong>
-                                        {route.ip}
-                                    </p>
-
-                                    <p>
-                                        <strong>Subnet:</strong>
-                                        {route.subnet}
-                                    </p>
-
-                                    <p>
-                                        <strong>Gateway:</strong>
-                                        {route.gateway}
-                                    </p>
-
-                                    <p>
-                                        <strong>Status:</strong>
-                                        {route.status}
-                                    </p>
-                                </div>
-                            ))
-                        }
-                    </div>
-            </div>
+            <RoutingPanel routingTable={routingTable} />
         </AppLayout>
     )
 }

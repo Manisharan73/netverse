@@ -1,8 +1,12 @@
 import { Handle, Position } from 'reactflow'
+import useNetworkStore from '../../stores/network.store'
 
-function RouterNode({ data }) {
+function RouterNode({ id, data }) {
+    const nodeMetrics = useNetworkStore((state) => state.nodeMetrics)
+    const metric = nodeMetrics[id] || {}
+
     return(
-        <div className={`custom-node router-node ${data.status?.toLowerCase()}`}>
+        <div className={`custom-node router-node ${metric.status?.toLowerCase() || 'online'}`}>
             <Handle 
                 type='target'
                 position={Position.Left}
@@ -19,7 +23,7 @@ function RouterNode({ data }) {
                     {data.ip}
                 </span>
 
-                <span className={`status-dot ${data.status?.toLowerCase()}`}> </span>
+                <span className={`status-dot ${metric.status?.toLowerCase() || 'online'}`}> </span>
             </div>
 
             <Handle 
