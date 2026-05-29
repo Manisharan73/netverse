@@ -1,62 +1,149 @@
 import socket from '../../websocket/socket'
 import useNetworkStore from '../../stores/network.store'
+import React, { useState } from 'react'
+import { requestDhcpLease } from '../../utils/dhcp.utils'
+import useEventStore from '../../stores/event.store'
+import useFirewallStore from '../../stores/firewall.store'
 
-export default function ConfigPanel({
-    selectedNode,
-    selectedEdge,
-    nodes,
-    setNodes,
-    setEdges,
-    setSelectedNode,
-    setSelectedEdge,
-    pingTarget,
-    setPingTarget,
-    pingNode,
-    deleteSelectedNode,
-    updateServiceStatus,
-    restartService,
-    deployUpdate
-}) {
+function ConfigPanel({ selectedNode, selectedEdge, nodes, setNodes, setEdges, setSelectedNode, setSelectedEdge, pingTarget, setPingTarget, pingNode, deleteSelectedNode, updateServiceStatus, restartService, deployUpdate }) {
+
     const nodeMetrics = useNetworkStore((state) => state.nodeMetrics)
-    if (!selectedNode && !selectedEdge) return null;
+    const addEvent = useEventStore((state) => state.addEvent)
+
+    const firewallRules = useFirewallStore((state) => state.rules)
+    const addRule = useFirewallStore((state) => state.addRule)
+    const removeRule = useFirewallStore((state) => state.removeRule)
+
+    const [packetType, setPacketType] = useState('ICMP')
+
+    if (!selectedNode && !selectedEdge) {
+        return null
+    }
 
     if (selectedEdge) {
         const handleEdgeUpdate = (field, value) => {
             const updatedEdge = {
                 ...selectedEdge,
+
                 data: {
                     ...selectedEdge.data,
                     [field]: field === 'status' ? value : Number(value)
                 }
             }
+
             setSelectedEdge(updatedEdge)
-            setEdges((currentEdges) => currentEdges.map(e => e.id === selectedEdge.id ? updatedEdge : e))
+
+            setEdges((currentEdges) =>
+                currentEdges.map((edge) =>
+                    edge.id === selectedEdge.id ? updatedEdge : edge
+                )
+            )
+        }
+
+        async function requestDhcp() {
+            const lease = await requestDhcpLease({
+                node: selectedNode,
+                addEvent
+            })
+
+            if (!lease) {
+                return
+            }
+
+            setNodes((nodes) =>
+                nodes.map((node) => {
+                    if (node.id.toString() === selectedNode.id.toString()) {
+                        return node
+                    }
+
+                    return {
+                        ...node,
+
+                        data: {
+                            ...node.data,
+
+                            ip: lease.ip,
+                            subnet: lease.subnet,
+                            gateway: lease.gateway
+                        }
+                    }
+                })
+            )
         }
 
         return (
             <div className="config-panel">
                 <h3>Edge Configuration</h3>
+
                 <p>ID: {selectedEdge.id}</p>
+
                 <p>
-                    Bandwidth (Mbps):<br/>
-                    <input type="number" value={selectedEdge.data?.bandwidth || 0} onChange={e => handleEdgeUpdate('bandwidth', e.target.value)} />
+                    Bandwidth (Mbps):
+                    <br />
+
+                    <input
+                        type="number"
+                        value={selectedEdge.data?.bandwidth || 0}
+                        onChange={(e) => handleEdgeUpdate('bandwidth', e.target.value)}
+                    />
                 </p>
+
                 <p>
-                    Latency (ms):<br/>
-                    <input type="number" value={selectedEdge.data?.latency || 0} onChange={e => handleEdgeUpdate('latency', e.target.value)} />
+                    Latency (ms):
+                    <br />
+
+                    <input
+                        type="number"
+                        value={selectedEdge.data?.latency || 0}
+                        onChange={(e) =>
+                            handleEdgeUpdate('latency', e.target.value)
+                        }
+                    />
                 </p>
+
                 <p>
-                    Packet Loss (0-1):<br/>
-                    <input type="number" step="0.01" value={selectedEdge.data?.packetLoss || 0} onChange={e => handleEdgeUpdate('packetLoss', e.target.value)} />
+                    Packet Loss (0-1):
+                    <br />
+
+                    <input
+                        type="number"
+                        step="0.01"
+                        value={selectedEdge.data?.packetLoss || 0}
+                        onChange={(e) => handleEdgeUpdate('packetLoss', e.target.value)}
+                    />
                 </p>
+
                 <p>
-                    Status:<br/>
-                    <select value={selectedEdge.data?.status || 'ONLINE'} onChange={e => handleEdgeUpdate('status', e.target.value)}>
+                    Status:
+                    <br />
+
+                    <select
+                        value={selectedEdge.data?.status || 'ONLINE'}
+                        onChange={(e) => handleEdgeUpdate('status', e.target.value)}
+                    >
                         <option value="ONLINE">ONLINE</option>
                         <option value="OFFLINE">OFFLINE</option>
                     </select>
                 </p>
-                <p>Current Traffic: {selectedEdge.data?.traffic || 0}</p>
+
+                <p>
+                    Current Traffic:
+                    {' '}
+                    {selectedEdge.data?.traffic || 0}
+                </p>
+
+                <select
+                    value={packetType}
+                    onChange={(e) =>
+                        setPacketType(e.target.value)
+                    }
+                >
+                    <option value="ICMP">ICMP</option>
+                    <option value="HTTP">HTTP</option>
+                    <option value="HTTPS">HTTPS</option>
+                    <option value="DNS">DNS</option>
+                    <option value="VOIP">VOIP</option>
+                </select>
             </div>
         )
     }
@@ -70,8 +157,10 @@ export default function ConfigPanel({
             <p>Type: {selectedNode.type}</p>
 
             <p>
-                Label: <input
-                    type='text'
+                Label:
+
+                <input
+                    type="text"
                     value={selectedNode.data.label}
                     onChange={(e) => {
                         const updatedLabel = e.target.value
@@ -81,6 +170,7 @@ export default function ConfigPanel({
                                 if (node.id === selectedNode.id) {
                                     return {
                                         ...node,
+
                                         data: {
                                             ...node.data,
                                             label: updatedLabel
@@ -94,25 +184,24 @@ export default function ConfigPanel({
 
                         setSelectedNode((prev) => ({
                             ...prev,
+
                             data: {
                                 ...prev.data,
                                 label: updatedLabel
                             }
                         }))
 
-                        socket.emit(
-                            'node:updateLabel',
-                            {
-                                id: selectedNode.id,
-                                label: updatedLabel
-                            }
-                        )
+                        socket.emit('node:updateLabel', {
+                            id: selectedNode.id,
+                            label: updatedLabel
+                        })
                     }}
                 />
             </p>
 
             <p>
                 IP Address:
+
                 <input
                     type="text"
                     value={selectedNode.data.ip || ''}
@@ -124,6 +213,7 @@ export default function ConfigPanel({
                                 if (node.id === selectedNode.id) {
                                     return {
                                         ...node,
+
                                         data: {
                                             ...node.data,
                                             ip: updatedIp
@@ -137,6 +227,7 @@ export default function ConfigPanel({
 
                         setSelectedNode((prev) => ({
                             ...prev,
+
                             data: {
                                 ...prev.data,
                                 ip: updatedIp
@@ -147,10 +238,50 @@ export default function ConfigPanel({
             </p>
 
             <p>
+                Hostname:
+
+                <input
+                    type="text"
+                    value={selectedNode.data.hostname || ''}
+
+                    onChange={(e) => {
+                        const hostname = e.target.value
+
+                        setNodes((nodes) =>
+                            nodes.map((node) => {
+                                if (
+                                    node.id !== selectedNode.id
+                                ) {
+                                    return node
+                                }
+
+                                return {
+                                    ...node,
+
+                                    data: {
+                                        ...node.data,
+                                        hostname
+                                    }
+                                }
+                            })
+                        )
+
+                        setSelectedNode((prev) => ({
+                            ...prev,
+                            data: {
+                                ...prev.data,
+                                hostname
+                            }
+                        }))
+                    }}
+                />
+            </p>
+
+            <p>
                 Subnet:
 
                 <input
-                    type='text'
+                    type="text"
                     value={selectedNode.data.subnet || ''}
                     onChange={(e) => {
                         const updatedSubnet = e.target.value
@@ -160,6 +291,7 @@ export default function ConfigPanel({
                                 if (node.id.toString() === selectedNode.id.toString()) {
                                     return {
                                         ...node,
+
                                         data: {
                                             ...node.data,
                                             subnet: updatedSubnet
@@ -175,19 +307,70 @@ export default function ConfigPanel({
             </p>
 
             <p>
+                VLAN:
+
+                <input
+                    type="number"
+
+                    value={
+                        selectedNode.data.vlan || 1
+                    }
+
+                    onChange={(e) => {
+                        const updatedVlan =
+                            Number(e.target.value)
+
+                        setNodes((nodes) =>
+                            nodes.map((node) => {
+                                if (
+                                    node.id.toString() ===
+                                    selectedNode.id.toString()
+                                ) {
+                                    return {
+                                        ...node,
+
+                                        data: {
+                                            ...node.data,
+
+                                            vlan:
+                                                updatedVlan
+                                        }
+                                    }
+                                }
+
+                                return node
+                            })
+                        )
+
+                        setSelectedNode((prev) => ({
+                            ...prev,
+
+                            data: {
+                                ...prev.data,
+
+                                vlan:
+                                    updatedVlan
+                            }
+                        }))
+                    }}
+                />
+            </p>
+
+            <p>
                 Gateway:
 
                 <input
-                    type='text'
+                    type="text"
                     value={selectedNode.data.gateway || ''}
                     onChange={(e) => {
-                        const updatedGateway = e.target.value;
+                        const updatedGateway = e.target.value
 
                         setNodes((nodes) =>
                             nodes.map((node) => {
                                 if (node.id.toString() === selectedNode.id.toString()) {
                                     return {
                                         ...node,
+
                                         data: {
                                             ...node.data,
                                             gateway: updatedGateway
@@ -206,7 +389,12 @@ export default function ConfigPanel({
                 selectedNode.type === 'routerNode' && (
                     <>
                         <p>OS: {selectedNode.data.os}</p>
-                        <p> Uptime: {metric.uptime}</p>
+
+                        <p>
+                            Uptime:
+                            {' '}
+                            {metric.uptime}
+                        </p>
                     </>
                 )
             }
@@ -215,7 +403,9 @@ export default function ConfigPanel({
                 selectedNode.type === 'serverNode' && (
                     <>
                         <p>CPU: {metric.cpu}</p>
+
                         <p>RAM: {metric.ram}</p>
+
                         <p>Storage: {metric.storage}</p>
 
                         <div className="services-panel">
@@ -228,23 +418,33 @@ export default function ConfigPanel({
                                         className="service-card"
                                     >
                                         <div>
-                                            <strong>{service.name}</strong>
+                                            <strong>
+                                                {service.name}
+                                            </strong>
                                         </div>
 
                                         <div>
-                                            Status: {service.status}
+                                            Status:
+                                            {' '}
+                                            {service.status}
                                         </div>
 
                                         <div>
-                                            CPU: {service.cpu}%
+                                            CPU:
+                                            {' '}
+                                            {service.cpu}%
                                         </div>
 
                                         <div>
-                                            Memory: {service.memory}%
+                                            Memory:
+                                            {' '}
+                                            {service.memory}%
                                         </div>
 
                                         <div>
-                                            Port: {service.port}
+                                            Port:
+                                            {' '}
+                                            {service.port}
                                         </div>
 
                                         <div className="service-actions">
@@ -261,32 +461,19 @@ export default function ConfigPanel({
                                             </button>
 
                                             <button
-                                                onClick={() =>
-                                                    updateServiceStatus(
-                                                        selectedNode.id,
-                                                        service.id,
-                                                        'FAILED'
-                                                    )
-                                                }
+                                                onClick={() => updateServiceStatus(selectedNode.id, service.id, 'FAILED')}
                                             >
                                                 Stop
                                             </button>
 
                                             <button
-                                                onClick={() =>
-                                                    restartService(
-                                                        selectedNode.id,
-                                                        service.id
-                                                    )
-                                                }
+                                                onClick={() => restartService(selectedNode.id, service.id)}
                                             >
                                                 Restart
                                             </button>
 
                                             <button
-                                                onClick={() =>
-                                                    deployUpdate(selectedNode.id)
-                                                }
+                                                onClick={() => deployUpdate(selectedNode.id)}
                                             >
                                                 Deploy Update
                                             </button>
@@ -301,29 +488,74 @@ export default function ConfigPanel({
 
             <p>Node ID: {selectedNode.id}</p>
 
-            <select
+            <input
+                type="text"
+                placeholder="Node ID or hostname"
                 value={pingTarget}
                 onChange={(e) => setPingTarget(e.target.value)}
+            />
+
+            <button
+                onClick={() =>
+                    pingNode(packetType)
+                }
             >
-                <option value=''>Select Target</option>
+                Ping Node
+            </button>
+
+            <div className="firewall-panel">
+                <h4>Firewall Rules</h4>
 
                 {
-                    nodes.filter(
-                        (node) => node.id.toString() !== selectedNode.id.toString()
-                    ).map((node) => (
-                        <option
-                            key={node.id}
-                            value={node.id}
+                    firewallRules.map((rule) => (
+                        <div
+                            key={rule.id}
+                            className="firewall-rule"
                         >
-                            {node.data.label}
-                        </option>
+                            <span>
+                                {rule.action}
+                                {' '}
+                                {rule.protocol}
+                                {' '}
+                                {rule.source}
+                                {' → '}
+                                {rule.target}
+                            </span>
+
+                            <button
+                                onClick={() =>
+                                    removeRule(rule.id)
+                                }
+                            >
+                                Delete
+                            </button>
+                        </div>
                     ))
                 }
-            </select>
 
-            <button onClick={pingNode}>Ping Node</button>
+                <button
+                    onClick={() =>
+                        addRule({
+                            action: 'DENY',
+                            protocol: 'ICMP',
+                            source: 'ANY',
+                            target: '8.8.8.8'
+                        })
+                    }
+                >
+                    Block Google DNS
+                </button>
+            </div>
 
-            <button onClick={deleteSelectedNode}>Delete Node</button>
+            <button onClick={deleteSelectedNode}>
+                Delete Node
+            </button>
+
+            <button onClick={requestDhcp}>
+                Request DHCP
+            </button>
         </div>
     )
 }
+
+export default React.memo(ConfigPanel)

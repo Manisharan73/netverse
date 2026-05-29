@@ -1,4 +1,6 @@
-export async function simulatePacketTraversal({ path, nodes, edges, setActiveEdges, setLogs, setEdgeStatus }) {
+import useEventStore from '../stores/event.store'
+
+export async function simulatePacketTraversal({ path, nodes, edges, setActiveEdges, setEdgeStatus }) {
     let latency = 0
 
     let ttl = path.length + 2
@@ -9,10 +11,11 @@ export async function simulatePacketTraversal({ path, nodes, edges, setActiveEdg
         if (ttl <= 0) {
             setEdgeStatus('failed')
 
-            setLogs((prev) => [
-                '[TTL EXPIRED] Packet Dropped',
-                ...prev
-            ])
+            useEventStore.getState().addEvent({
+                type: 'NETWORK',
+                severity: 'ERROR',
+                message: 'TTL EXPIRED: Packet Dropped'
+            })
 
             return false
         }
@@ -46,10 +49,11 @@ export async function simulatePacketTraversal({ path, nodes, edges, setActiveEdg
         if (packetDropped) {
             setEdgeStatus('failed')
 
-            setLogs((prev) => [
-                `[PACKET LOSS] Packet dropped between ${source} → ${target}`,
-                ...prev
-            ])
+            useEventStore.getState().addEvent({
+                type: 'NETWORK',
+                severity: 'ERROR',
+                message: `PACKET LOSS: Packet dropped between ${source} → ${target}`
+            })
 
             setActiveEdges([])
 

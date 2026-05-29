@@ -1,6 +1,7 @@
+import React from 'react'
 import useNetworkStore from '../../stores/network.store'
 
-export default function AnalyticsPanel({ nodes }) {
+export default React.memo(function AnalyticsPanel({ nodes }) {
     const nodeMetrics = useNetworkStore((state) => state.nodeMetrics)
 
     return (
@@ -35,4 +36,4 @@ export default function AnalyticsPanel({ nodes }) {
             }
         </div>
     )
-}
+})

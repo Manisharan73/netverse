@@ -1,4 +1,6 @@
-export default function IncidentsPanel({ incidents }) {
+import React from 'react'
+
+export default React.memo(function IncidentsPanel({ incidents }) {
     return (
         <div className="incident-panel">
             <div className="incident-header">
@@ -33,4 +35,4 @@ export default function IncidentsPanel({ incidents }) {
             </div>
         </div>
     )
-}
+})

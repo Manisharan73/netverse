@@ -4,8 +4,13 @@ import AppLayout from '../layouts/AppLayout'
 import '../styles/networks.css'
 import RouterNode from '../components/nodes/RouterNode'
 import ServerNode from '../components/nodes/ServerNode'
+import SwitchNode from '../components/nodes/SwitchNode'
 import { createNetwork, getNetworkById, updateNetwork } from '../services/network.service'
 import useNetworkStore from '../stores/network.store'
+import usePacketStore from '../stores/packet.store'
+import useEventStore from '../stores/event.store'
+import useStpStore from '../stores/stp.store'
+import { electRootBridge, detectLoops } from '../utils/stp.utils'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import socket from '../websocket/socket'
 import { v4 as uuidv4 } from 'uuid'
@@ -20,6 +25,9 @@ import useNetworkStats from '../hooks/useNetworkStats'
 import useRoutingTable from '../hooks/useRoutingTable'
 import useRoutingEngine from '../hooks/useRoutingEngine'
 import useTrafficSimulation from '../hooks/useTrafficSimulation'
+import usePacketSimulation from '../hooks/usePacketSimulation'
+import useEdgeMonitoring from '../hooks/useEdgeMonitoring'
+import usePacketLifecycle from '../hooks/usePacketLifecycle'
 
 import ConfigPanel from '../components/network/ConfigPanel'
 import NetworkCanvas from '../components/network/NetworkCanvas'
@@ -30,27 +38,35 @@ import AnalyticsPanel from '../components/network/AnalyticsPanel'
 import AlertsPanel from '../components/network/AlertsPanel'
 import IncidentsPanel from '../components/network/IncidentsPanel'
 import RoutingPanel from '../components/network/RoutingPanel'
+import PacketLayer from '../components/network/PacketLayer'
+import PacketRenderer from '../components/network/PacketRenderer'
+import LinkConfigPanel from '../components/network/LinkConfigPanel'
+import PacketInspector from '../components/network/PacketInspector'
+import EventTimeline from '../components/network/EventTimeline'
+import MacTablePanel from '../components/network/MacTablePanel'
 
-import { DEVICE_TEMPLATES } from '../constants/deviceTemplates'
+import { DEVICE_TEMPLATES, SWITCH_TEMPLATE } from '../constants/deviceTemplates'
 import { createNodeFromTemplate } from '../utils/createNodeFromTemplate'
-
-const nodeTypes = {
-    routerNode: RouterNode,
-    serverNode: ServerNode,
-}
+import { exportSimulationState, importSimulationState } from '../utils/networkSerializer'
 
 function NetworksPage() {
+
+    const nodeTypes = useMemo(() => ({
+        routerNode: RouterNode,
+        serverNode: ServerNode,
+        switchNode: SwitchNode
+    }), [])
+
     const [nodes, setNodes, onNodesChangeReactFlow] = useNodesState(INITIAL_NODES)
     const [edges, setEdges, onEdgesChangeReactFlow] = useEdgesState(INITIAL_EDGES)
     const [currentNetworkId, setCurrentNetworkId] = useState(null)
     const [selectedNode, setSelectedNode] = useState(null)
     const [selectedEdge, setSelectedEdge] = useState(null)
     const [saveStatus, setSaveStatus] = useState('Saved')
-    const [logs, setLogs] = useState([])
+    const addEvent = useEventStore((state) => state.addEvent)
     const [pingTarget, setPingTarget] = useState('')
     const [alerts, setAlerts] = useState([])
     const [incidents, setIncidents] = useState([])
-
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
 
@@ -59,20 +75,49 @@ function NetworksPage() {
     const setNodeMetrics = useNetworkStore((state) => state.setNodeMetrics)
     const updateNodeMetricById = useNetworkStore((state) => state.updateNodeMetricById)
 
+    const packets = usePacketStore((state) => state.packets)
+
+    const setRootBridge = useStpStore((state) => state.setRootBridge)
+    const setBlockedEdges = useStpStore((state) => state.setBlockedEdges)
+    const blockedEdges = useStpStore((state) => state.blockedEdges)
+
     useNetworkSocket({ setNodes, setEdges, setSelectedNode })
 
+    useEdgeMonitoring({ setEdges })
+
+    usePacketLifecycle()
+
+    // usePacketSimulation({ nodes, edges})
+
     const { graph, getRoute, getRouteLatency } = useRoutingEngine(nodes, edges)
+
+    useEffect(() => {
+        const rootBridge = electRootBridge(nodes)
+        setRootBridge(rootBridge)
+
+        const blocked = detectLoops(nodes, edges)
+        setBlockedEdges(blocked)
+
+        if (blocked.length > 0) {
+            setAlerts((prev) => [
+                {
+                    id: crypto.randomUUID(),
+                    severity: 'WARNING',
+                    message: `STP blocked ${blocked.length} redundant links`
+                },
+                ...prev
+            ])
+        }
+    }, [nodes, edges])
 
     const { pingNode, activeEdges, edgeStatus } = usePingSimulation({
         nodes,
         edges,
         setEdges,
-        graph,
         getRoute,
         getRouteLatency,
         selectedNode,
-        pingTarget,
-        setLogs
+        pingTarget
     })
 
     useMonitoringSimulation({ nodes, setIncidents, setAlerts })
@@ -152,7 +197,8 @@ function NetworksPage() {
                 name: 'My Infrastructure',
                 description: 'NetVerse Topology',
                 nodes,
-                edges
+                edges,
+                simulation: exportSimulationState()
             }
 
             if (currentNetworkId) {
@@ -184,6 +230,17 @@ function NetworksPage() {
 
     function addServer() {
         const newNode = createNodeFromTemplate(DEVICE_TEMPLATES.LINUX_SERVER)
+
+        setNodes((nodes) => [
+            ...nodes,
+            newNode
+        ])
+
+        socket.emit('node:add', newNode)
+    }
+
+    function addSwitch() {
+        const newNode = createNodeFromTemplate(SWITCH_TEMPLATE)
 
         setNodes((nodes) => [
             ...nodes,
@@ -238,6 +295,10 @@ function NetworksPage() {
             setNodes(formattedNodes)
             setEdges(formattedEdges)
             setNodeMetrics(parsedMetrics)
+
+            if (network.simulation) {
+                importSimulationState({ simulation: network.simulation })
+            }
         } catch (err) {
             console.error(err)
             setError('Failed to load network!')
@@ -291,29 +352,33 @@ function NetworksPage() {
     }, [updateServiceStatus])
 
     const deployUpdate = useCallback((nodeId) => {
-        setLogs((prev) => [`[DEPLOYMENT] Starting deployment...`, ...prev])
+        addEvent({ type: 'DEPLOYMENT', severity: 'INFO', message: 'Starting deployment...' })
         updateServiceStatus(nodeId, 1, 'RESTARTING')
         updateServiceStatus(nodeId, 2, 'RESTARTING')
 
         setTimeout(() => {
             updateServiceStatus(nodeId, 1, 'RUNNING')
             updateServiceStatus(nodeId, 2, 'RUNNING')
-            setLogs((prev) => [`[DEPLOYMENT] Deployment successful`, ...prev])
+            addEvent({ type: 'DEPLOYMENT', severity: 'SUCCESS', message: 'Deployment successful' })
         }, 5000)
-    }, [updateServiceStatus])
+    }, [updateServiceStatus, addEvent])
 
-    useEffect(() => {
-        if (!selectedNode) return
-        const updatedNode = nodes.find((node) => node.id.toString() === selectedNode.id.toString())
-        if (updatedNode) setSelectedNode(updatedNode)
-    }, [nodes, selectedNode])
+    const nodeMap = useMemo(() => {
+        const map = {}
+        nodes.forEach((node) => {
+            map[node.id.toString()] = node
+        })
+        return map
+    }, [nodes])
 
     const animatedEdges = useMemo(() => {
         return edges.map((edge) => {
-            const sourceNode = nodes.find((node) => node.id.toString() === edge.source.toString())
-            const targetNode = nodes.find((node) => node.id.toString() === edge.target.toString())
+            const sourceNode = nodeMap[edge.source.toString()]
+            const targetNode = nodeMap[edge.target.toString()]
 
             const edgeData = edge.data || {}
+
+            const isBlocked = blockedEdges.includes(edge.id)
 
             const relatedTraffic = edgeData.traffic || 0
 
@@ -339,18 +404,27 @@ function NetworksPage() {
                 edgeWidth = 5
             }
 
-            const sourceMetric = sourceNode ? (nodeMetrics[sourceNode.id] || {}) : {}
-            const targetMetric = targetNode ? (nodeMetrics[targetNode.id] || {}) : {}
+            const sourceStatus = nodeMetrics[sourceNode?.id]?.status
+            const targetStatus = nodeMetrics[targetNode?.id]?.status
 
             if (sourceMetric.status === 'OFFLINE' || targetMetric.status === 'OFFLINE') {
                 edgeColor = '#991b1b'
                 edgeWidth = 4
             }
 
+            if (edgeData.status === 'CONGESTED') {
+                edgeColor = '#f97316'
+            }
+
+            if (isBlocked) {
+                edgeColor = '#f59e0b'
+                edgeWidth = 3
+            }
+
             return {
                 ...edge,
                 type: 'custom',
-                animated: edgeData.status !== 'OFFLINE',
+                animated: activeEdges.includes(edge.id) && edgeData.status !== 'OFFLINE',
 
                 style: {
                     stroke: edgeColor,
@@ -367,11 +441,10 @@ function NetworksPage() {
 
             <NetworkStats {...stats} />
 
-            <AnalyticsPanel nodes={nodes} />
-
             <NetworkToolbar
                 addRouter={addRouter}
                 addServer={addServer}
+                addSwitch={addSwitch}
                 saveNetwork={saveNetwork}
                 loadNetwork={loadNetwork}
             />
@@ -393,6 +466,11 @@ function NetworksPage() {
                 deployUpdate={deployUpdate}
             />
 
+            <LinkConfigPanel
+                selectedEdge={selectedEdge}
+                setEdges={setEdges}
+            />
+
             <NetworkCanvas
                 nodes={nodes}
                 edges={animatedEdges}
@@ -405,13 +483,22 @@ function NetworksPage() {
                 onNodeDragStop={onNodeDragStop}
             />
 
-            <TerminalPanel logs={logs} />
+            <PacketLayer
+                packets={packets}
+                nodes={nodes}
+            />
+
+            <PacketInspector />
 
             <IncidentsPanel incidents={incidents} />
 
             <AlertsPanel alerts={alerts} />
 
             <RoutingPanel routingTable={routingTable} />
+
+            <MacTablePanel />
+
+            <EventTimeline />
         </AppLayout>
     )
 }

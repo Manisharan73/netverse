@@ -1,4 +1,6 @@
-export default function AlertsPanel({ alerts }) {
+import React from 'react'
+
+export default React.memo(function AlertsPanel({ alerts }) {
     return (
         <div className="alerts-panel">
             <div className="alerts-header">
@@ -20,4 +22,4 @@ export default function AlertsPanel({ alerts }) {
             </div>
         </div>
     )
-}
+})

@@ -5,6 +5,7 @@ export const DEVICE_TEMPLATES = {
         data: {
             label: 'Cisco Router',
             status: 'ONLINE',
+            vlan: 1,
 
             ip: '192.168.1.1',
             subnet: '192.168.1.0/24',
@@ -26,6 +27,7 @@ export const DEVICE_TEMPLATES = {
         data: {
             label: 'Linux Server',
             status: 'ONLINE',
+            vlan: 1,
 
             ip: '10.0.0.10',
             subnet: '10.0.0.0/24',
@@ -70,6 +72,7 @@ export const DEVICE_TEMPLATES = {
         data: {
             label: 'Database Server',
             status: 'ONLINE',
+            vlan: 1,
 
             ip: '10.0.1.20',
             subnet: '10.0.1.0/24',
@@ -114,6 +117,7 @@ export const DEVICE_TEMPLATES = {
         data: {
             label: 'Firewall',
             status: 'ONLINE',
+            vlan: 1,
 
             ip: '172.16.0.1',
             subnet: '172.16.0.0/24',
@@ -127,5 +131,23 @@ export const DEVICE_TEMPLATES = {
             packetsReceived: 0,
             packetLoss: 0
         }
+    }
+}
+
+export const SWITCH_TEMPLATE = {
+    type: 'switchNode',
+
+    data: {
+        label: 'Switch',
+
+        ip: '',
+        subnet: '',
+        gateway: '',
+
+        os: 'Cisco IOS',
+
+        vlan: 1,
+
+        macTableSize: 1024
     }
 }

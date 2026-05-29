@@ -1,14 +1,19 @@
 import { useMemo } from "react"
-
-import {
-    buildAdjacencyGraph,
-    findShortestPath
-} from '../utils/network.utils'
+import useStpStore from '../stores/stp.store'
+import { buildAdjacencyGraph, findShortestPath } from '../utils/network.utils'
 
 function useRoutingEngine(nodes, edges) {
+    const blockedEdges = useStpStore((state) => state.blockedEdges)
+
     const graph = useMemo(() => {
-        return buildAdjacencyGraph(nodes, edges)
-    }, [nodes, edges])
+        const activeEdges = edges.filter((edge) => {
+            if (blockedEdges.includes(edge.id)) {
+                return false
+            }
+            return true
+        })
+        return buildAdjacencyGraph(nodes, activeEdges)
+    }, [nodes, edges, blockedEdges])
 
     function getRoute(startNode, endNode) {
         if (!startNode || !endNode) {

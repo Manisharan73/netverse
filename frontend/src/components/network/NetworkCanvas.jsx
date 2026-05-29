@@ -1,6 +1,7 @@
 import React from 'react'
 import { ReactFlow, MiniMap, Controls, Background } from 'reactflow'
 import CustomEdge from './CustomEdge'
+import PacketLayer from './PacketLayer'
 
 const edgeTypes = {
     custom: CustomEdge
@@ -31,21 +32,15 @@ const NetworkCanvas = React.memo(function NetworkCanvas({
                 onEdgeClick={onEdgeClick}
                 onNodeDragStop={onNodeDragStop}
                 fitView
+                onlyRenderVisibleElements
             >
-                <MiniMap
-                    nodeColor={(node) => {
-                        switch (node.type) {
-                            case 'routerNode': return '#2563eb'
-                            case 'serverNode': return '#16a34a'
-                            default: return '#6b7280'
-                        }
-                    }}
-                />
 
                 <Controls />
-
-                <Background />
             </ReactFlow>
+
+            <div className="packet-layer-wrapper">
+                <PacketLayer nodes={nodes} />
+            </div>
         </div>
     )
 })

@@ -1,6 +1,8 @@
+import { generateMacAddress } from "./mac.utils"
+
 export function createNodeFromTemplate(template) {
     return {
-        id: `${Date.now()}-${Math.random()}`,
+        id: crypto.randomUUID(),
 
         position: {
             x: Math.random() * 100,
@@ -9,8 +11,9 @@ export function createNodeFromTemplate(template) {
 
         type: template.type,
 
-        data:{
-            ...template.data
+        data: {
+            ...template.data,
+            mac: generateMacAddress()
         }
     }
 }

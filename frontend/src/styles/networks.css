@@ -18,13 +18,13 @@
     border: 2px solid #1e293b;
     border-radius: 18px;
     overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     transition: transform 0.2s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .custom-node:hover {
     transform: translateY(-2px);
-    box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
 .node-header {
@@ -238,62 +238,62 @@
 }
 
 .analytics-grid {
-  display: grid;
-  grid-template-columns:
-      repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
+    display: grid;
+    grid-template-columns:
+        repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
 }
 
 .analytics-card {
-  background: #111827;
-  border: 1px solid #1f2937;
-  border-radius: 14px;
-  padding: 14px;
+    background: #111827;
+    border: 1px solid #1f2937;
+    border-radius: 14px;
+    padding: 14px;
 }
 
 .alerts-panel {
-  margin-top: 20px;
-  background: #111827;
-  border: 1px solid #1f2937;
-  border-radius: 14px;
-  overflow: hidden;
+    margin-top: 20px;
+    background: #111827;
+    border: 1px solid #1f2937;
+    border-radius: 14px;
+    overflow: hidden;
 }
 
 .alerts-header {
-  padding: 14px;
-  border-bottom: 1px solid #1f2937;
-  font-weight: bold;
+    padding: 14px;
+    border-bottom: 1px solid #1f2937;
+    font-weight: bold;
 }
 
 .alerts-body {
-  max-height: 220px;
-  overflow-y: auto;
+    max-height: 220px;
+    overflow-y: auto;
 }
 
 .alert-item {
-  padding: 12px;
-  border-bottom: 1px solid #1f2937;
+    padding: 12px;
+    border-bottom: 1px solid #1f2937;
 }
 
 .alert-item.CRITICAL {
-  color: #ef4444;
+    color: #ef4444;
 }
 
 .alert-item.WARNING {
-  color: #f59e0b;
+    color: #f59e0b;
 }
 
 .services-panel {
-  margin-top: 18px;
+    margin-top: 18px;
 }
 
 .service-card {
-  background: #0f172a;
-  border: 1px solid #1e293b;
-  border-radius: 10px;
-  padding: 10px;
-  margin-top: 10px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 10px;
+    margin-top: 10px;
 }
 
 .services-panel {
@@ -348,4 +348,35 @@
 
 .incident-card.warning {
     border-left: 4px solid #f59e0b;
+}
+
+.mac-table-panel {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    width: 340px;
+    max-height: 300px;
+    overflow-y: auto;
+    background: #111827;
+    color: white;
+    border-radius: 10px;
+    padding: 12px;
+    z-index: 20;
+}
+
+.mac-table-panel table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.mac-table-panel th,
+.mac-table-panel td {
+    border: 1px solid #374151;
+    padding: 6px;
+    font-size: 12px;
+}
+
+.mac-table-switch {
+    margin-bottom: 20px;
 }

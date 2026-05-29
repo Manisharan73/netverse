@@ -1,0 +1,31 @@
+.packet-renderer {
+    position: absolute;
+    z-index: 1000;
+    pointer-events: none;
+    transition: left 0.6s linear, top 0.6s linear;
+}
+
+.packet-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    animation: pulsePacket 1s infinite;
+}
+
+@keyframes pulsePacket {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.4);
+        opacity: 0.7;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}

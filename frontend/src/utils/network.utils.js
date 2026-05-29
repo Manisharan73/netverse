@@ -231,3 +231,36 @@ export function isValidIp(ip) {
 
     return regex.test(ip)
 }
+
+export function sameVlan(
+    sourceNode,
+    targetNode
+) {
+    return (
+        Number(sourceNode.data?.vlan) ===
+        Number(targetNode.data?.vlan)
+    )
+}
+
+export function canRouteInterVlan({
+    path,
+    nodes
+}) {
+    for (const nodeId of path) {
+        const node = nodes.find(
+            (n) =>
+                n.id.toString() ===
+                nodeId.toString()
+        )
+
+        if (!node) {
+            continue
+        }
+
+        if (node.type === 'routerNode') {
+            return true
+        }
+    }
+
+    return false
+}

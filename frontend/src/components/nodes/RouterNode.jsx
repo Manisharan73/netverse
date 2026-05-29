@@ -23,6 +23,11 @@ function RouterNode({ id, data }) {
                     {data.ip}
                 </span>
 
+                <div>
+                    VLAN:
+                    {data.vlan}
+                </div>
+
                 <span className={`status-dot ${metric.status?.toLowerCase() || 'online'}`}> </span>
             </div>
 

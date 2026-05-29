@@ -54,12 +54,14 @@ export default function CustomEdge({
                     }}
                     className="nodrag nopan"
                 >
-                    <div>BW: {data?.bandwidth || 0}Mbps</div>
+                    {/* Temporarily disabled multiline labels for performance */}
+                    <div>{data?.latency || 0}ms</div>
+                    {/* <div>BW: {data?.bandwidth || 0}Mbps</div>
                     <div>LAT: {data?.latency || 0}ms</div>
                     <div>LOSS: {Math.floor((data?.packetLoss || 0) * 100)}%</div>
                     <div style={{ color: isOffline ? '#ef4444' : '#22c55e', marginTop: '2px', fontWeight: 'bold' }}>
                         {data?.status || 'ONLINE'}
-                    </div>
+                    </div> */}
                 </div>
             </EdgeLabelRenderer>
         </>

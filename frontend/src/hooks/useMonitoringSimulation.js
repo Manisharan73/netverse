@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import useNetworkStore from '../stores/network.store'
 import { evaluateNodeMetrics } from '../utils/monitoringEngine'
+import useSwitchStore from '../stores/switch.store'
 
 export default function useMonitoringSimulation({ nodes, setIncidents, setAlerts }) {
     const setNodeMetrics = useNetworkStore((state) => state.setNodeMetrics)
@@ -14,9 +15,9 @@ export default function useMonitoringSimulation({ nodes, setIncidents, setAlerts
 
                 nodes.forEach((node) => {
                     const currentMetric = currentMetrics[node.id]
-                    
+
                     const { updatedMetric, newAlerts, newIncidents } = evaluateNodeMetrics(node, currentMetric)
-                    
+
                     if (updatedMetric) {
                         nextMetrics[node.id] = updatedMetric
                     }
@@ -43,4 +44,12 @@ export default function useMonitoringSimulation({ nodes, setIncidents, setAlerts
 
         return () => clearInterval(interval)
     }, [nodes, setIncidents, setAlerts, setNodeMetrics])
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            useSwitchStore.getState().clearExpiredEntries()
+        }, 30000)
+
+        return () => clearInterval(interval)
+    }, [])
 }

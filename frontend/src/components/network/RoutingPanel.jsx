@@ -1,4 +1,6 @@
-export default function RoutingPanel({ routingTable }) {
+import React from 'react'
+
+export default React.memo(function RoutingPanel({ routingTable }) {
     return (
         <div className="routing-panel">
             <div className="routing-header">
@@ -42,4 +44,4 @@ export default function RoutingPanel({ routingTable }) {
             </div>
         </div>
     )
-}
+})

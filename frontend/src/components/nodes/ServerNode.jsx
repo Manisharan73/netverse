@@ -23,6 +23,11 @@ function ServerNode({ id, data }) {
                     {data.ip}
                 </span>
 
+                <div>
+                    VLAN:
+                    {data.vlan}
+                </div>
+
                 <div className="server-metrics">
                     <small>
                         CPU: {metric.cpu || '0%'}

@@ -1,6 +1,7 @@
 export default function NetworkToolbar({
     addRouter,
     addServer,
+    addSwitch,
     saveNetwork,
     loadNetwork
 }) {
@@ -12,6 +13,10 @@ export default function NetworkToolbar({
 
             <button onClick={addServer}>
                 Add Server
+            </button>
+
+            <button onClick={addSwitch}>
+                Add Switch
             </button>
 
             <button

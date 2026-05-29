@@ -10,15 +10,31 @@ export const INITIAL_NODES = [
     {
         id: '1',
         position: { x: 100, y: 100 },
-        data: { label: 'Main Router', ip: '192.168.1.1', os: 'Cisco IOS', subnet: '192.168.1.0/24', gateway: '192.168.1.1' },
+        data: {
+            label: 'Main Router',
+            ip: '192.168.1.1',
+            publicIp: '203.0.113.1',
+            os: 'Cisco IOS',
+            subnet: '192.168.1.0/24',
+            gateway: '192.168.1.1'
+        },
         type: 'routerNode',
     },
+
     {
         id: '2',
         position: { x: 400, y: 200 },
-        data: { label: 'Web Server', ip: '10.0.0.25', os: 'Ubuntu 22.04' },
+        data: {
+            label: 'Web Server',
+
+            ip: '',
+            subnet: '',
+            gateway: '',
+
+            os: 'Ubuntu 22.04'
+        },
         type: 'serverNode',
-    },
+    }
 ]
 
 export const INITIAL_EDGES = [
@@ -60,9 +76,11 @@ export const INITIAL_METRICS = {
 export const DEFAULT_ROUTER_DATA = {
     label: 'Router',
     ip: '192.168.1.1',
+    publicIp: '203.0.113.1',
     os: 'Cisco IOS',
     subnet: '192.168.1.0/24',
-    gateway: '192.168.1.1'
+    gateway: '192.168.1.1',
+    hostname: 'router.local'
 }
 
 export const DEFAULT_ROUTER_METRICS = {
@@ -76,8 +94,11 @@ export const DEFAULT_ROUTER_METRICS = {
 
 export const DEFAULT_SERVER_DATA = {
     label: 'Server',
-    ip: '10.0.0.25',
-    os: 'Ubuntu 22.04'
+    ip: '',
+    subnet: '',
+    gateway: '',
+    os: 'Ubuntu 22.04',
+    hostname: 'web.local'
 }
 
 export const DEFAULT_SERVER_METRICS = {
@@ -94,4 +115,18 @@ export const DEFAULT_SERVER_METRICS = {
         { id: 2, name: 'auth-service', status: STATUS_ENUMS.RUNNING, cpu: 18, memory: 30, port: 3000 },
         { id: 3, name: 'redis', status: STATUS_ENUMS.RUNNING, cpu: 9, memory: 18, port: 6379 }
     ]
+}
+
+export const DEFAULT_SWITCH_METRICS = {
+    status: 'ONLINE',
+
+    traffic: 0,
+
+    packetsSent: 0,
+    packetsReceived: 0,
+
+    cpu: '5%',
+    ram: '10%',
+
+    macTableEntries: 0
 }
