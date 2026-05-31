@@ -1,0 +1,89 @@
+/* Packet Wrappers & Layers */
+.packet-layer-wrapper {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: var(--z-packet-wrapper);
+}
+
+.packet-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--z-layer);
+}
+
+/* New standard packet style */
+.packet {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: var(--z-overlay);
+  box-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+  transform: translate(-50%, -50%);
+  transition: left 0.4s linear, top 0.4s linear, transform 120ms linear;
+  will-change: transform, left, top;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.packet-label {
+  position: absolute;
+  top: -18px;
+  font-size: 9px;
+  font-weight: bold;
+  color: white;
+  white-space: nowrap;
+}
+
+/* Protocol specific styling */
+.packet-icmp { border-radius: 50%; }
+.packet-http {
+  border-radius: 2px;
+  width: 14px;
+  height: 14px;
+}
+.packet-https {
+  border-radius: 4px;
+  box-shadow: 0 0 12px var(--purple), 0 0 24px var(--purple);
+}
+.packet-dns::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  transform: rotate(45deg);
+}
+
+.packet-voip { animation: voipPulse 0.35s infinite alternate; }
+
+@keyframes voipPulse {
+  from { scale: 1; }
+  to { scale: 1.4; }
+}
+
+/* Packet Renderer (from packet-renderer.css) */
+.packet-renderer {
+  position: absolute;
+  z-index: var(--z-packet-renderer);
+  pointer-events: none;
+  transition: left 0.6s linear, top 0.6s linear;
+}
+
+.packet-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+  animation: pulsePacket 1s infinite;
+}
+
+@keyframes pulsePacket {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
+}

@@ -1,0 +1,50 @@
+:root {
+  /* Colors - Enterprise NOC Dark Mode */
+  --bg-main: #050810;
+  --bg-surface: #0a0f1c;
+  --bg-panel: rgba(15, 23, 42, 0.7);
+  --bg-sidebar: rgba(10, 15, 28, 0.9);
+  --bg-terminal: #020617;
+  
+  --text-main: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-blue: #38bdf8;
+  
+  --border-light: rgba(148, 163, 184, 0.15);
+  --border-main: rgba(51, 65, 85, 0.5);
+  --border-dark: rgba(30, 41, 59, 0.5);
+  --border-darker: rgba(15, 23, 42, 0.8);
+  
+  --primary: #3b82f6;
+  --primary-dark: #2563eb;
+  
+  --success: #10b981;
+  --warning: #facc15;
+  --warning-dark: #f59e0b;
+  --error: #f43f5e;
+  --purple: #8b5cf6;
+  --emerald: #059669;
+  
+  /* Shadows & Glows */
+  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.5);
+  --glow-primary: 0 0 15px rgba(59, 130, 246, 0.4);
+  --glow-success: 0 0 15px rgba(16, 185, 129, 0.4);
+  --glow-error: 0 0 15px rgba(244, 63, 94, 0.4);
+  
+  /* Glassmorphism */
+  --backdrop-blur: blur(16px);
+  --panel-radius: 16px;
+  --card-radius: 12px;
+  
+  /* Z-index */
+  --z-config-panel: 10;
+  --z-layer: 20;
+  --z-overlay: 30;
+  --z-timeline: 40;
+  --z-inspector: 50;
+  --z-packet-wrapper: 100;
+  --z-packet-renderer: 1000;
+}

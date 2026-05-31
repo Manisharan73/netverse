@@ -1,7 +1,7 @@
-import React from 'react'
+import React, { forwardRef } from 'react'
 import usePacketStore from '../../stores/packet.store'
 
-function Packet({ x, y, color, type }) {
+const Packet = forwardRef(({ color, type, packetId }, ref) => {
     let packetClass = 'packet'
 
     const setSelectedPacket = usePacketStore((state) => state.setSelectedPacket)
@@ -29,10 +29,14 @@ function Packet({ x, y, color, type }) {
 
     return (
         <div
+            ref={ref}
             className={packetClass}
             style={{
-                transform: `translate3d(${x}px, ${y}px, 0)`,
-                backgroundColor: color
+                backgroundColor: color,
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                transform: `translate3d(0px, 0px, 0)` // Initial transform
             }}
             onClick={() =>
                 setSelectedPacket({
@@ -46,6 +50,6 @@ function Packet({ x, y, color, type }) {
             </span>
         </div>
     )
-}
+})
 
 export default React.memo(Packet)

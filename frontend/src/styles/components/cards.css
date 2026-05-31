@@ -1,0 +1,105 @@
+/* Stat Card */
+.stat-card {
+  background: var(--bg-panel);
+  backdrop-filter: var(--backdrop-blur);
+  border: 1px solid var(--border-dark);
+  border-radius: var(--card-radius);
+  padding: 20px;
+  box-shadow: var(--shadow-lg);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--primary);
+  box-shadow: var(--glow-primary);
+}
+
+.stat-card h3 {
+  font-size: 32px;
+  margin-bottom: 8px;
+  color: var(--text-main);
+}
+
+.stat-card p {
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.server-metrics {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.server-metrics small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Route Card */
+.route-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-main);
+  border-radius: var(--card-radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Analytics Card */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.analytics-card {
+  background: var(--bg-panel);
+  backdrop-filter: var(--backdrop-blur);
+  border: 1px solid var(--border-dark);
+  border-radius: var(--card-radius);
+  padding: 14px;
+}
+
+/* Service Card */
+.service-card {
+  background: var(--bg-panel);
+  backdrop-filter: var(--backdrop-blur);
+  border: 1px solid var(--border-main);
+  border-radius: var(--card-radius);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.service-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.service-actions button {
+  flex: 1;
+}
+
+/* Incident Card */
+.incident-card {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-darker);
+}
+
+.incident-card.critical { border-left: 4px solid var(--error); }
+.incident-card.warning { border-left: 4px solid var(--warning-dark); }

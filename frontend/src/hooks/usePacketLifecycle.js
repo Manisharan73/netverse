@@ -9,7 +9,7 @@ export default function usePacketLifecycle() {
         const interval = setInterval(() => {
             const now = Date.now()
 
-            packets.forEach((packet) => {
+            Object.values(packets).forEach((packet) => {
                 const expired = now - packet.createdAt > packet.ttl
 
                 if(expired) {

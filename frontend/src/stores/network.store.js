@@ -5,6 +5,12 @@ const useNetworkStore = create((set) => ({
     currentNetwork: null,
     nodeMetrics: INITIAL_METRICS,
 
+    activeEdges: [],
+    edgeStatus: 'success',
+
+    setActiveEdges: (edges) => set({ activeEdges: edges }),
+    setEdgeStatus: (status) => set({ edgeStatus: status }),
+
     setCurrentNetwork: (network) => {
         set({
             currentNetwork: network

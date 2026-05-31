@@ -9,22 +9,22 @@ export default React.memo(function TerminalPanel() {
         if (terminalRef.current) {
             terminalRef.current.scrollTop = 0
         }
-    })
+    }, [events])
 
     return (
-        <div className="terminal-panel">
-            <div className="terminal-header">
-                Network Terminal
+        <div className="terminal-panel styled-scroll">
+            <div className="panel-header">
+                <h3>Network Terminal</h3>
             </div>
 
-            <div className="terminal-body" ref={terminalRef}>
+            <div className="terminal-body font-mono text-sm" ref={terminalRef}>
                 {
                     events.map((event) => (
                         <div
                             key={event.id}
-                            className={`terminal-line terminal-${event.severity.toLowerCase()}`}
+                            className={`terminal-line terminal-${event.severity?.toLowerCase() || 'info'}`}
                         >
-                            <span className="terminal-time">[{new Date(event.timeStamp).toLocaleTimeString()}]</span>
+                            <span className="terminal-time opacity-70">[{new Date(event.timestamp).toLocaleTimeString()}]</span>
                             {' '}
                             <span className="terminal-type">[{event.type}]</span>
                             {' '}

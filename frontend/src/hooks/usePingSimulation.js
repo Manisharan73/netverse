@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { resolveDns } from '../utils/dns.utils'
 import { isValidIp } from '../utils/network.utils'
 import useNetworkStore from '../stores/network.store'
-import { simulatePacketTraversal } from '../utils/packetSimulation'
+import { simulateHopByHop } from '../utils/packetSimulation'
 import usePacketStore from '../stores/packet.store'
 import useEventStore from '../stores/event.store'
 import { PROTOCOL_PROFILES } from '../constants/protocolConfig'
@@ -10,72 +10,40 @@ import useArpStore from '../stores/arp.store'
 import { resolveArp } from '../utils/arp.utils'
 import useSwitchStore from '../stores/switch.store'
 import useStpStore from '../stores/stp.store'
-import { findSwitchesInPath } from '../utils/switch.utils'
-import { requiresNat, performNat } from '../utils/nat.utils'
 import { INTERNET_HOSTS } from '../constants/internet.config'
 import useFirewallStore from '../stores/firewall.store'
-import { buildEdgeMap } from '../utils/edge.utils'
-import { validateConnectivity } from '../utils/networkValidation'
-import { dispatchArpBroadcast, handlePacketFlow } from '../utils/packetFlow'
-import { getTraversedEdges, calculateRouteLatency } from '../utils/route.utils'
+import createPacket from '../utils/createPacket'
 
-export default function usePingSimulation({ nodes, edges, setEdges, getRoute, selectedNode, pingTarget }) {
-    const [activeEdges, setActiveEdges] = useState([])
-    const [edgeStatus, setEdgeStatus] = useState('success')
-
-    const firewallRules = useFirewallStore((state) => state.rules)
+export default function usePingSimulation({ nodes, edges, setEdges, routingTable, selectedNode, pingTarget }) {
     const addEvent = useEventStore((state) => state.addEvent)
     const addArpEntry = useArpStore((state) => state.addArpEntry)
     const getMac = useArpStore((state) => state.getMac)
-    const learnMac = useSwitchStore((state) => state.learnMac)
-    const blockedEdges = useStpStore((state) => state.blockedEdges)
+    
+    const nodesRef = useRef(nodes)
+    const edgesRef = useRef(edges)
+    const routingTableRef = useRef(routingTable)
+    
+    useEffect(() => {
+        nodesRef.current = nodes
+    }, [nodes])
+    
+    useEffect(() => {
+        edgesRef.current = edges
+    }, [edges])
 
-    function simulateTraffic(path, protocolProfile, nodeMap) {
-        const setNodeMetrics = useNetworkStore.getState().setNodeMetrics
-
-        setNodeMetrics((currentMetrics) => {
-            const nextMetrics = { ...currentMetrics }
-
-            path.forEach((nodeId) => {
-                const metric = nextMetrics[nodeId] || {}
-                nextMetrics[nodeId] = {
-                    ...metric,
-                    traffic: (metric.traffic || 0) + protocolProfile.trafficWeight,
-                    packetsSent: (metric.packetsSent || 0) + 1,
-                    packetsReceived: (metric.packetsReceived || 0) + 1
-                }
-
-                const node = nodeMap.get(nodeId.toString())
-                if (node?.type === 'switchNode') {
-                    nextMetrics[nodeId] = {
-                        ...nextMetrics[nodeId],
-                        macTableEntries: Object.keys(
-                            useSwitchStore.getState().macTable[nodeId] || {}
-                        ).length
-                    }
-                }
-            })
-
-            return nextMetrics
-        })
-    }
+    useEffect(() => {
+        routingTableRef.current = routingTable
+    }, [routingTable])
 
     async function pingNode(packetType = 'ICMP') {
         if (!selectedNode || !pingTarget) return
 
-        const broadcastPackets = usePacketStore.getState().packets.filter((packet) => packet.isBroadcast)
-        if (broadcastPackets.length > 20) {
-            addEvent({ type: 'STORM', severity: 'CRITICAL', message: 'Broadcast storm detected' })
-            return
-        }
+        const currentNodes = nodesRef.current
+        const currentEdges = edgesRef.current
+        const currentRoutingTable = routingTableRef.current
 
-        const nodeMap = new Map()
-        nodes.forEach((node) => nodeMap.set(node.id.toString(), node))
-
-        const edgeMap = buildEdgeMap(edges)
-
-        let targetNode = nodeMap.get(pingTarget.toString())
         let finalIp = pingTarget
+        let targetNode = currentNodes.find(node => node.data.ip === finalIp)
 
         if (!targetNode && !isValidIp(pingTarget)) {
             const resolvedIp = await resolveDns({ domain: pingTarget, addEvent })
@@ -84,94 +52,83 @@ export default function usePingSimulation({ nodes, edges, setEdges, getRoute, se
         }
 
         if (!targetNode) {
-            targetNode = nodes.find((node) => node.data.ip === finalIp)
+            targetNode = currentNodes.find((node) => node.data.ip === finalIp)
         }
 
         if (!targetNode && INTERNET_HOSTS.includes(finalIp)) {
             targetNode = {
                 id: 'internet',
-                data: { label: 'Internet Host', ip: finalIp }
+                data: { label: 'Internet Host', ip: finalIp, mac: '00:00:00:00:00:00' }
             }
         }
 
-        let destinationId = targetNode?.id?.toString()
-        if (destinationId === 'internet') {
-            const router = nodes.find((node) => node.type === 'routerNode')
-            if (router) destinationId = router.id.toString()
+        if (!targetNode) {
+            addEvent({ type: 'NETWORK', severity: 'ERROR', message: `Cannot reach ${finalIp}: Destination host unreachable` })
+            return
         }
 
-        const path = getRoute(selectedNode.id.toString(), destinationId)
+        const sourceIp = selectedNode.data.ip
+        const isSameSubnet = targetNode.data?.subnet && selectedNode.data?.subnet && targetNode.data.subnet === selectedNode.data.subnet
 
-        const isValid = validateConnectivity({
-            selectedNode, targetNode, packetType, firewallRules, path, nodes, addEvent
-        })
-
-        if (!isValid) return
-
-        const { traversedEdges, blocked, failed } = getTraversedEdges({
-            path, edgeMap, blockedEdges, addEvent
-        })
-
-        if (blocked || failed) return
-
-        const protocolProfile = PROTOCOL_PROFILES[packetType]
-
-        const arpPacket = dispatchArpBroadcast({ selectedNode, path, addEvent })
-
-        let destinationMac = getMac(targetNode.data.ip)
-        if (!destinationMac) {
-            destinationMac = await resolveArp({ sourceNode: selectedNode, targetNode, addEvent, addArpEntry })
-        }
-
-        const switches = findSwitchesInPath({ path, nodes })
-        switches.forEach((switchId) => {
-            learnMac(switchId, selectedNode.data.mac, selectedNode.id, selectedNode.data.vlan || 1)
-            learnMac(switchId, targetNode.data.mac, targetNode.id, targetNode.data.vlan || 1)
-        })
-
-        const { packet, dropped } = handlePacketFlow({
-            packetType, selectedNode, targetNode, destinationMac, path, traversedEdges, edges, addEvent, setEdgeStatus, setActiveEdges
-        })
-
-        if (dropped) return
-
-        simulateTraffic(path, protocolProfile, nodeMap)
-
-        setEdges((currentEdges) =>
-            currentEdges.map((edge) => {
-                if (traversedEdges.includes(edge.id)) {
-                    return { ...edge, data: { ...edge.data, traffic: (edge.data?.traffic || 0) + 25 } }
-                }
-                return edge
-            })
-        )
-
-        const needsNat = requiresNat({ sourceIp: selectedNode.data.ip, targetIp: targetNode.data.ip })
-        if (needsNat) {
-            const router = nodes.find((node) => node.type === 'routerNode')
-            if (!router?.data?.publicIp) {
-                addEvent({ type: 'NAT', severity: 'ERROR', message: 'No public gateway available' })
+        let nextHopIp = finalIp
+        if (!isSameSubnet && targetNode.id !== 'internet') {
+            nextHopIp = selectedNode.data.gateway
+            if (!nextHopIp) {
+                addEvent({ type: 'NETWORK', severity: 'ERROR', message: 'No default gateway configured' })
                 return
             }
-            const translation = performNat({ sourceIp: selectedNode.data.ip, publicIp: router.data.publicIp })
-            addEvent({ type: 'NAT', severity: 'INFO', message: `${translation.privateIp} translated to ${translation.publicIp}` })
         }
 
-        let latency = calculateRouteLatency({ traversedEdges, edges, packet, protocolProfile })
-
-        await simulatePacketTraversal({ path, nodes, edges, setActiveEdges, setEdgeStatus })
-
-        if (latency > 150) {
-            addEvent({ type: 'NETWORK', severity: 'WARNING', message: `High latency detected (${latency}ms)` })
+        let destinationMac = getMac(selectedNode.id.toString(), nextHopIp)
+        if (!destinationMac) {
+            addEvent({ type: 'ARP', severity: 'INFO', message: `Resolving MAC for ${nextHopIp}` })
+            const nextHopNode = currentNodes.find(n => n.data.ip === nextHopIp) || targetNode
+            destinationMac = await resolveArp({ sourceNode: selectedNode, targetNode: nextHopNode, addEvent, addArpEntry })
+            if (!destinationMac) {
+                addEvent({ type: 'NETWORK', severity: 'ERROR', message: `ARP failed for ${nextHopIp}. Destination unreachable.` })
+                return
+            }
         }
 
-        setEdgeStatus('success')
+        const packet = createPacket({
+            sourceId: selectedNode.id,
+            targetId: targetNode.id,
+            type: packetType,
+            sourceIp,
+            destinationIp: finalIp,
+            sourceMac: selectedNode.data.mac,
+            destinationMac,
+            vlan: selectedNode.data.vlan
+        })
+
+        usePacketStore.getState().addPacket(packet)
+
+        const setActiveEdges = useNetworkStore.getState().setActiveEdges
+        const setEdgeStatus = useNetworkStore.getState().setEdgeStatus
+
         addEvent({
             type: 'PING',
-            severity: 'SUCCESS',
-            message: `Route: ${path.join(' → ')} Reply from ${targetNode.data.ip} time=${latency}ms`
+            severity: 'INFO',
+            message: `Pinging ${finalIp} with 32 bytes of data`
         })
+
+        const result = await simulateHopByHop({
+            packet,
+            nodes: currentNodes,
+            edges: currentEdges,
+            routingTables: currentRoutingTable || {},
+            setActiveEdges,
+            setEdgeStatus
+        })
+
+        if (result.success) {
+            addEvent({
+                type: 'PING',
+                severity: 'SUCCESS',
+                message: `Reply from ${finalIp}: time=${result.latency}ms`
+            })
+        }
     }
 
-    return { pingNode, activeEdges, edgeStatus }
+    return { pingNode }
 }

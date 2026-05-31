@@ -1,4 +1,3 @@
-import './App.css'
 import { Routes, Route, Navigate, BrowserRouter } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'

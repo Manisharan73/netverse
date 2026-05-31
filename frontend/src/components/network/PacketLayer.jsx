@@ -1,118 +1,125 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-
+import React, { useEffect, useMemo, useRef } from 'react'
 import usePacketStore from '../../stores/packet.store'
 import Packet from './Packet'
 
 function PacketLayer({ nodes }) {
-    const packets = usePacketStore((state) => state.packets)
+    const packetMap = usePacketStore((state) => state.packets)
 
-    const [positions, setPositions] = useState({})
+    const packets = useMemo(
+        () => Object.values(packetMap || {}),
+        [packetMap]
+    )
 
+    const packetsRef = useRef([])
+    const nodePositionsRef = useRef({})
+    
+    // Tracks the current hop animation state for each packet
+    const hopAnimationsRef = useRef({})
+    const packetRefs = useRef({})
     const animationFrameRef = useRef(null)
 
-    const nodePositions = useMemo(() => {
-        const map = {}
+    useEffect(() => {
+        packetsRef.current = packets
+    }, [packets])
 
+    useEffect(() => {
+        const map = {}
         nodes.forEach((node) => {
             map[node.id] = {
-                x: node.position.x + 75,
-                y: node.position.y + 35
+                x: node.position.x + ((node.width || 200) / 2),
+                y: node.position.y + ((node.height || 80) / 2)
             }
         })
-
-        return map
+        nodePositionsRef.current = map
     }, [nodes])
 
     useEffect(() => {
-        if (!packets.length) {
-            setPositions({})
-            return
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current)
         }
-
-        let startTime = performance.now()
 
         function animate(now) {
-            const elapsed = now - startTime
+            const currentPackets = packetsRef.current
+            const positions = nodePositionsRef.current
+            const hopAnims = hopAnimationsRef.current
 
-            const nextPositions = {}
+            currentPackets.forEach((packet) => {
+                if (!packet || !packet.id) return
 
-            packets.forEach((packet) => {
-                if (!packet.path || packet.path.length < 2) {
-                    return
+                let animState = hopAnims[packet.id]
+
+                // If the packet has moved to a new hop, reset the animation state
+                if (!animState || animState.currentLocation !== packet.currentLocation || animState.previousLocation !== packet.previousLocation) {
+                    animState = {
+                        startTime: now,
+                        previousLocation: packet.previousLocation,
+                        currentLocation: packet.currentLocation,
+                        duration: packet.currentHopLatency || 400
+                    }
+                    hopAnims[packet.id] = animState
                 }
 
-                const totalSegments = packet.path.length - 1
+                const { startTime, previousLocation, currentLocation, duration } = animState
+                
+                const sourceId = previousLocation || packet.sourceId
+                const targetId = currentLocation || packet.sourceId
 
-                const progress = Math.min(elapsed / 3000, 1)
+                const sourcePos = positions[sourceId]
+                const targetPos = positions[targetId]
 
-                const segmentProgress = progress * totalSegments
+                if (!sourcePos || !targetPos) return
 
-                const currentSegment = Math.min(
-                    Math.floor(segmentProgress),
-                    totalSegments - 1
-                )
+                const elapsed = now - startTime
+                const progress = Math.min(elapsed / duration, 1)
 
-                const localProgress =
-                    segmentProgress - currentSegment
+                // Add a slight easing function for smoother visual
+                const easeProgress = progress < 0.5 
+                    ? 4 * progress * progress * progress 
+                    : 1 - Math.pow(-2 * progress + 2, 3) / 2
 
-                const sourceId = packet.path[currentSegment]
-                const targetId = packet.path[currentSegment + 1]
+                const currentX = sourcePos.x + (targetPos.x - sourcePos.x) * easeProgress
+                const currentY = sourcePos.y + (targetPos.y - sourcePos.y) * easeProgress
 
-                const sourcePos = nodePositions[sourceId]
-                const targetPos = nodePositions[targetId]
-
-                if (!sourcePos || !targetPos) {
-                    return
+                const packetElement = packetRefs.current[packet.id]
+                if (packetElement) {
+                    packetElement.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`
                 }
-
-                const x =
-                    sourcePos.x +
-                    (targetPos.x - sourcePos.x) * localProgress
-
-                const y =
-                    sourcePos.y +
-                    (targetPos.y - sourcePos.y) * localProgress
-
-                nextPositions[packet.id] = { x, y }
             })
 
-            setPositions(nextPositions)
+            // Clean up state for removed packets
+            const packetIds = new Set(currentPackets.map(p => p.id))
+            Object.keys(hopAnims).forEach(id => {
+                if (!packetIds.has(id)) {
+                    delete hopAnims[id]
+                    delete packetRefs.current[id]
+                }
+            })
 
-            animationFrameRef.current =
-                requestAnimationFrame(animate)
+            animationFrameRef.current = requestAnimationFrame(animate)
         }
 
-        animationFrameRef.current =
-            requestAnimationFrame(animate)
+        animationFrameRef.current = requestAnimationFrame(animate)
 
         return () => {
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current)
             }
         }
-    }, [packets, nodePositions])
+    }, [])
 
     return (
         <>
-            {
-                packets.map((packet) => {
-                    const position = positions[packet.id]
-
-                    if (!position) {
-                        return null
-                    }
-
-                    return (
-                        <Packet
-                            key={packet.id}
-                            x={position.x}
-                            y={position.y}
-                            color={packet.color}
-                            type={packet.type}
-                        />
-                    )
-                })
-            }
+            {packets.map((packet) => (
+                <Packet
+                    key={packet.id}
+                    packetId={packet.id}
+                    ref={(el) => {
+                        if (el) packetRefs.current[packet.id] = el
+                    }}
+                    color={packet.color || '#22c55e'}
+                    type={packet.type || 'ICMP'}
+                />
+            ))}
         </>
     )
 }

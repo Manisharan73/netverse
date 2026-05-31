@@ -1,7 +1,18 @@
 import { PROTOCOL_PROFILES } from '../constants/protocolConfig'
 
-export default function createPacket({ sourceId, targetId, path, type, vlan }) {
-    const profile = PROTOCOL_PROFILES[type]
+export default function createPacket(options) {
+    const { 
+        sourceId, 
+        targetId, 
+        type, 
+        vlan, 
+        sourceIp, 
+        destinationIp, 
+        sourceMac, 
+        destinationMac 
+    } = options
+
+    const profile = PROTOCOL_PROFILES[type] || { color: '#ccc', ttl: 64 }
 
     return {
         id: crypto.randomUUID(),
@@ -9,14 +20,21 @@ export default function createPacket({ sourceId, targetId, path, type, vlan }) {
         sourceId,
         targetId,
 
-        path,
+        currentLocation: sourceId,
+        previousLocation: null,
+        nextLocation: null,
+        
+        sourceIp,
+        destinationIp,
+        sourceMac,
+        destinationMac,
 
         type,
         vlan: vlan || 1,
 
-        color: profile.color,
+        color: options.color || profile.color,
 
-        ttl: profile.ttl,
+        ttl: profile.ttl || 64,
 
         createdAt: Date.now(),
 

@@ -1,12 +1,11 @@
 import socket from '../../websocket/socket'
 import useNetworkStore from '../../stores/network.store'
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { requestDhcpLease } from '../../utils/dhcp.utils'
 import useEventStore from '../../stores/event.store'
 import useFirewallStore from '../../stores/firewall.store'
 
 function ConfigPanel({ selectedNode, selectedEdge, nodes, setNodes, setEdges, setSelectedNode, setSelectedEdge, pingTarget, setPingTarget, pingNode, deleteSelectedNode, updateServiceStatus, restartService, deployUpdate }) {
-
     const nodeMetrics = useNetworkStore((state) => state.nodeMetrics)
     const addEvent = useEventStore((state) => state.addEvent)
 
@@ -16,15 +15,102 @@ function ConfigPanel({ selectedNode, selectedEdge, nodes, setNodes, setEdges, se
 
     const [packetType, setPacketType] = useState('ICMP')
 
-    if (!selectedNode && !selectedEdge) {
-        return null
+    const [localNodeData, setLocalNodeData] = useState({
+        label: '',
+        ip: '',
+        hostname: '',
+        subnet: '',
+        vlan: 1,
+        gateway: ''
+    })
+
+    useEffect(() => {
+        if (selectedNode) {
+            setLocalNodeData({
+                label: selectedNode.data.label || '',
+                ip: selectedNode.data.ip || '',
+                hostname: selectedNode.data.hostname || '',
+                subnet: selectedNode.data.subnet || '',
+                vlan: selectedNode.data.vlan || 1,
+                gateway: selectedNode.data.gateway || ''
+            })
+        }
+    }, [selectedNode?.id])
+
+    const handleNodeBlur = (field) => {
+        const value = localNodeData[field]
+
+        setNodes((nodes) =>
+            nodes.map((node) => {
+                if (node.id === selectedNode.id) {
+                    return {
+                        ...node,
+                        data: {
+                            ...node.data,
+                            [field]: value
+                        }
+                    }
+                }
+                return node
+            })
+        )
+
+        setSelectedNode((prev) => ({
+            ...prev,
+            data: {
+                ...prev.data,
+                [field]: value
+            }
+        }))
+
+        if (field === 'label') {
+            socket.emit('node:updateLabel', { id: selectedNode.id, label: value })
+        }
     }
+
+    async function requestDhcp() {
+        if (!selectedNode) return
+
+        const lease = await requestDhcpLease({
+            node: selectedNode,
+            addEvent
+        })
+
+        if (!lease) return
+
+        setNodes((nodes) =>
+            nodes.map((node) => {
+                if (node.id.toString() !== selectedNode.id.toString()) return node
+
+                return {
+                    ...node,
+                    data: {
+                        ...node.data,
+                        ip: lease.ip,
+                        subnet: lease.subnet,
+                        gateway: lease.gateway
+                    }
+                }
+            })
+        )
+
+        setSelectedNode((prev) => ({
+            ...prev,
+            data: {
+                ...prev.data,
+                ip: lease.ip,
+                subnet: lease.subnet,
+                gateway: lease.gateway
+            }
+        }))
+    }
+
+    if (!selectedNode && !selectedEdge) return null
 
     if (selectedEdge) {
         const handleEdgeUpdate = (field, value) => {
             const updatedEdge = {
                 ...selectedEdge,
-
                 data: {
                     ...selectedEdge.data,
                     [field]: field === 'status' ? value : Number(value)
@@ -40,110 +126,68 @@ function ConfigPanel({ selectedNode, selectedEdge, nodes, setNodes, setEdges, se
             )
         }
 
-        async function requestDhcp() {
-            const lease = await requestDhcpLease({
-                node: selectedNode,
-                addEvent
-            })
-
-            if (!lease) {
-                return
-            }
-
-            setNodes((nodes) =>
-                nodes.map((node) => {
-                    if (node.id.toString() === selectedNode.id.toString()) {
-                        return node
-                    }
-
-                    return {
-                        ...node,
-
-                        data: {
-                            ...node.data,
-
-                            ip: lease.ip,
-                            subnet: lease.subnet,
-                            gateway: lease.gateway
-                        }
-                    }
-                })
-            )
-        }
-
         return (
-            <div className="config-panel">
-                <h3>Edge Configuration</h3>
+            <div className="config-panel styled-scroll">
+                <div className="panel-header">
+                    <h3>Edge Configuration</h3>
+                    <span className="badge">ID: {selectedEdge.id}</span>
+                </div>
 
-                <p>ID: {selectedEdge.id}</p>
+                <div className="panel-section">
+                    <div className="form-grid">
+                        <div className="form-group">
+                            <label>Bandwidth (Mbps)</label>
+                            <input
+                                type="number"
+                                value={selectedEdge.data?.bandwidth || 0}
+                                onChange={(e) => handleEdgeUpdate('bandwidth', e.target.value)}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>Latency (ms)</label>
+                            <input
+                                type="number"
+                                value={selectedEdge.data?.latency || 0}
+                                onChange={(e) => handleEdgeUpdate('latency', e.target.value)}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>Packet Loss (0-1)</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={selectedEdge.data?.packetLoss || 0}
+                                onChange={(e) => handleEdgeUpdate('packetLoss', e.target.value)}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>Status</label>
+                            <select
+                                value={selectedEdge.data?.status || 'ONLINE'}
+                                onChange={(e) => handleEdgeUpdate('status', e.target.value)}
+                            >
+                                <option value="ONLINE">ONLINE</option>
+                                <option value="OFFLINE">OFFLINE</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
 
-                <p>
-                    Bandwidth (Mbps):
-                    <br />
-
-                    <input
-                        type="number"
-                        value={selectedEdge.data?.bandwidth || 0}
-                        onChange={(e) => handleEdgeUpdate('bandwidth', e.target.value)}
-                    />
-                </p>
-
-                <p>
-                    Latency (ms):
-                    <br />
-
-                    <input
-                        type="number"
-                        value={selectedEdge.data?.latency || 0}
-                        onChange={(e) =>
-                            handleEdgeUpdate('latency', e.target.value)
-                        }
-                    />
-                </p>
-
-                <p>
-                    Packet Loss (0-1):
-                    <br />
-
-                    <input
-                        type="number"
-                        step="0.01"
-                        value={selectedEdge.data?.packetLoss || 0}
-                        onChange={(e) => handleEdgeUpdate('packetLoss', e.target.value)}
-                    />
-                </p>
-
-                <p>
-                    Status:
-                    <br />
-
+                <div className="panel-section border-none">
+                    <h4>Traffic Simulator</h4>
+                    <p className="text-muted">Current Traffic: <strong>{selectedEdge.data?.traffic || 0}</strong></p>
                     <select
-                        value={selectedEdge.data?.status || 'ONLINE'}
-                        onChange={(e) => handleEdgeUpdate('status', e.target.value)}
+                        className="mt-2"
+                        value={packetType}
+                        onChange={(e) => setPacketType(e.target.value)}
                     >
-                        <option value="ONLINE">ONLINE</option>
-                        <option value="OFFLINE">OFFLINE</option>
+                        <option value="ICMP">ICMP</option>
+                        <option value="HTTP">HTTP</option>
+                        <option value="HTTPS">HTTPS</option>
+                        <option value="DNS">DNS</option>
+                        <option value="VOIP">VOIP</option>
                     </select>
-                </p>
-
-                <p>
-                    Current Traffic:
-                    {' '}
-                    {selectedEdge.data?.traffic || 0}
-                </p>
-
-                <select
-                    value={packetType}
-                    onChange={(e) =>
-                        setPacketType(e.target.value)
-                    }
-                >
-                    <option value="ICMP">ICMP</option>
-                    <option value="HTTP">HTTP</option>
-                    <option value="HTTPS">HTTPS</option>
-                    <option value="DNS">DNS</option>
-                    <option value="VOIP">VOIP</option>
-                </select>
+                </div>
             </div>
         )
     }
@@ -151,409 +195,169 @@ function ConfigPanel({ selectedNode, selectedEdge, nodes, setNodes, setEdges, se
     const metric = nodeMetrics[selectedNode.id] || {}
 
     return (
-        <div className="config-panel">
-            <h3>Node Configuration</h3>
+        <div className="config-panel styled-scroll">
+            <div className="panel-header">
+                <h3>Node Configuration</h3>
+                <span className="badge">{selectedNode.type}</span>
+            </div>
 
-            <p>Type: {selectedNode.type}</p>
+            {/* General Info */}
+            <div className="panel-section">
+                <h4>General</h4>
+                <div className="form-grid">
+                    <div className="form-group col-span-2">
+                        <label>Label</label>
+                        <input
+                            type="text"
+                            value={localNodeData.label}
+                            onChange={(e) => setLocalNodeData({ ...localNodeData, label: e.target.value })}
+                            onBlur={() => handleNodeBlur('label')}
+                        />
+                    </div>
+                    <div className="form-group col-span-2">
+                        <label>Hostname</label>
+                        <input
+                            type="text"
+                            value={localNodeData.hostname}
+                            onChange={(e) => setLocalNodeData({ ...localNodeData, hostname: e.target.value })}
+                            onBlur={() => handleNodeBlur('hostname')}
+                        />
+                    </div>
+                </div>
+            </div>
 
-            <p>
-                Label:
+            {/* Network Settings */}
+            <div className="panel-section">
+                <h4>Network</h4>
+                <div className="form-grid">
+                    <div className="form-group col-span-2">
+                        <label>IP Address</label>
+                        <div className="input-with-button">
+                            <input
+                                type="text"
+                                value={localNodeData.ip}
+                                onChange={(e) => setLocalNodeData({ ...localNodeData, ip: e.target.value })}
+                                onBlur={() => handleNodeBlur('ip')}
+                            />
+                            <button className="btn-secondary" onClick={requestDhcp} title="Request DHCP">DHCP</button>
+                        </div>
+                    </div>
+                    <div className="form-group">
+                        <label>Subnet</label>
+                        <input
+                            type="text"
+                            value={localNodeData.subnet}
+                            onChange={(e) => setLocalNodeData({ ...localNodeData, subnet: e.target.value })}
+                            onBlur={() => handleNodeBlur('subnet')}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label>VLAN</label>
+                        <input
+                            type="number"
+                            value={localNodeData.vlan}
+                            onChange={(e) => setLocalNodeData({ ...localNodeData, vlan: Number(e.target.value) })}
+                            onBlur={() => handleNodeBlur('vlan')}
+                        />
+                    </div>
+                    <div className="form-group col-span-2">
+                        <label>Gateway</label>
+                        <input
+                            type="text"
+                            value={localNodeData.gateway}
+                            onChange={(e) => setLocalNodeData({ ...localNodeData, gateway: e.target.value })}
+                            onBlur={() => handleNodeBlur('gateway')}
+                        />
+                    </div>
+                </div>
+            </div>
 
-                <input
-                    type="text"
-                    value={selectedNode.data.label}
-                    onChange={(e) => {
-                        const updatedLabel = e.target.value
+            {/* System Metrics (Router) */}
+            {selectedNode.type === 'routerNode' && (
+                <div className="panel-section metrics-box">
+                    <div className="metric"><span>OS</span><strong>{selectedNode.data.os}</strong></div>
+                    <div className="metric"><span>Uptime</span><strong>{metric.uptime || 'N/A'}</strong></div>
+                </div>
+            )}
 
-                        setNodes((nodes) =>
-                            nodes.map((node) => {
-                                if (node.id === selectedNode.id) {
-                                    return {
-                                        ...node,
+            {/* System Metrics & Services (Server) */}
+            {selectedNode.type === 'serverNode' && (
+                <>
+                    <div className="panel-section metrics-box">
+                        <div className="metric"><span>CPU</span><strong>{metric.cpu || '0%'}</strong></div>
+                        <div className="metric"><span>RAM</span><strong>{metric.ram || '0%'}</strong></div>
+                        <div className="metric"><span>Storage</span><strong>{metric.storage || '0%'}</strong></div>
+                    </div>
 
-                                        data: {
-                                            ...node.data,
-                                            label: updatedLabel
-                                        }
-                                    }
-                                }
-
-                                return node
-                            })
-                        )
-
-                        setSelectedNode((prev) => ({
-                            ...prev,
-
-                            data: {
-                                ...prev.data,
-                                label: updatedLabel
-                            }
-                        }))
-
-                        socket.emit('node:updateLabel', {
-                            id: selectedNode.id,
-                            label: updatedLabel
-                        })
-                    }}
-                />
-            </p>
-
-            <p>
-                IP Address:
-
-                <input
-                    type="text"
-                    value={selectedNode.data.ip || ''}
-                    onChange={(e) => {
-                        const updatedIp = e.target.value
-
-                        setNodes((nodes) =>
-                            nodes.map((node) => {
-                                if (node.id === selectedNode.id) {
-                                    return {
-                                        ...node,
-
-                                        data: {
-                                            ...node.data,
-                                            ip: updatedIp
-                                        }
-                                    }
-                                }
-
-                                return node
-                            })
-                        )
-
-                        setSelectedNode((prev) => ({
-                            ...prev,
-
-                            data: {
-                                ...prev.data,
-                                ip: updatedIp
-                            }
-                        }))
-                    }}
-                />
-            </p>
-
-            <p>
-                Hostname:
-
-                <input
-                    type="text"
-                    value={selectedNode.data.hostname || ''}
-
-                    onChange={(e) => {
-                        const hostname = e.target.value
-
-                        setNodes((nodes) =>
-                            nodes.map((node) => {
-                                if (
-                                    node.id !== selectedNode.id
-                                ) {
-                                    return node
-                                }
-
-                                return {
-                                    ...node,
-
-                                    data: {
-                                        ...node.data,
-                                        hostname
-                                    }
-                                }
-                            })
-                        )
-
-                        setSelectedNode((prev) => ({
-                            ...prev,
-                            data: {
-                                ...prev.data,
-                                hostname
-                            }
-                        }))
-                    }}
-                />
-            </p>
-
-            <p>
-                Subnet:
-
-                <input
-                    type="text"
-                    value={selectedNode.data.subnet || ''}
-                    onChange={(e) => {
-                        const updatedSubnet = e.target.value
-
-                        setNodes((nodes) =>
-                            nodes.map((node) => {
-                                if (node.id.toString() === selectedNode.id.toString()) {
-                                    return {
-                                        ...node,
-
-                                        data: {
-                                            ...node.data,
-                                            subnet: updatedSubnet
-                                        }
-                                    }
-                                }
-
-                                return node
-                            })
-                        )
-                    }}
-                />
-            </p>
-
-            <p>
-                VLAN:
-
-                <input
-                    type="number"
-
-                    value={
-                        selectedNode.data.vlan || 1
-                    }
-
-                    onChange={(e) => {
-                        const updatedVlan =
-                            Number(e.target.value)
-
-                        setNodes((nodes) =>
-                            nodes.map((node) => {
-                                if (
-                                    node.id.toString() ===
-                                    selectedNode.id.toString()
-                                ) {
-                                    return {
-                                        ...node,
-
-                                        data: {
-                                            ...node.data,
-
-                                            vlan:
-                                                updatedVlan
-                                        }
-                                    }
-                                }
-
-                                return node
-                            })
-                        )
-
-                        setSelectedNode((prev) => ({
-                            ...prev,
-
-                            data: {
-                                ...prev.data,
-
-                                vlan:
-                                    updatedVlan
-                            }
-                        }))
-                    }}
-                />
-            </p>
-
-            <p>
-                Gateway:
-
-                <input
-                    type="text"
-                    value={selectedNode.data.gateway || ''}
-                    onChange={(e) => {
-                        const updatedGateway = e.target.value
-
-                        setNodes((nodes) =>
-                            nodes.map((node) => {
-                                if (node.id.toString() === selectedNode.id.toString()) {
-                                    return {
-                                        ...node,
-
-                                        data: {
-                                            ...node.data,
-                                            gateway: updatedGateway
-                                        }
-                                    }
-                                }
-
-                                return node
-                            })
-                        )
-                    }}
-                />
-            </p>
-
-            {
-                selectedNode.type === 'routerNode' && (
-                    <>
-                        <p>OS: {selectedNode.data.os}</p>
-
-                        <p>
-                            Uptime:
-                            {' '}
-                            {metric.uptime}
-                        </p>
-                    </>
-                )
-            }
-
-            {
-                selectedNode.type === 'serverNode' && (
-                    <>
-                        <p>CPU: {metric.cpu}</p>
-
-                        <p>RAM: {metric.ram}</p>
-
-                        <p>Storage: {metric.storage}</p>
-
-                        <div className="services-panel">
-                            <h4>Services</h4>
-
-                            {
-                                metric.services?.map((service) => (
-                                    <div
-                                        key={service.id}
-                                        className="service-card"
-                                    >
-                                        <div>
-                                            <strong>
-                                                {service.name}
-                                            </strong>
-                                        </div>
-
-                                        <div>
-                                            Status:
-                                            {' '}
-                                            {service.status}
-                                        </div>
-
-                                        <div>
-                                            CPU:
-                                            {' '}
-                                            {service.cpu}%
-                                        </div>
-
-                                        <div>
-                                            Memory:
-                                            {' '}
-                                            {service.memory}%
-                                        </div>
-
-                                        <div>
-                                            Port:
-                                            {' '}
-                                            {service.port}
-                                        </div>
-
-                                        <div className="service-actions">
-                                            <button
-                                                onClick={() =>
-                                                    updateServiceStatus(
-                                                        selectedNode.id,
-                                                        service.id,
-                                                        'RUNNING'
-                                                    )
-                                                }
-                                            >
-                                                Start
-                                            </button>
-
-                                            <button
-                                                onClick={() => updateServiceStatus(selectedNode.id, service.id, 'FAILED')}
-                                            >
-                                                Stop
-                                            </button>
-
-                                            <button
-                                                onClick={() => restartService(selectedNode.id, service.id)}
-                                            >
-                                                Restart
-                                            </button>
-
-                                            <button
-                                                onClick={() => deployUpdate(selectedNode.id)}
-                                            >
-                                                Deploy Update
-                                            </button>
-                                        </div>
+                    <div className="panel-section">
+                        <h4>Services</h4>
+                        <div className="services-list">
+                            {metric.services?.map((service) => (
+                                <div key={service.id} className="service-card">
+                                    <div className="service-header">
+                                        <strong>{service.name}</strong>
+                                        <span className={`status-badge ${service.status?.toLowerCase()}`}>{service.status}</span>
                                     </div>
-                                ))
-                            }
+                                    <div className="service-stats">
+                                        <span>CPU: {service.cpu}%</span>
+                                        <span>MEM: {service.memory}%</span>
+                                        <span>Port: {service.port}</span>
+                                    </div>
+                                    <div className="service-actions">
+                                        <button className="btn-sm btn-success" onClick={() => updateServiceStatus(selectedNode.id, service.id, 'RUNNING')}>Start</button>
+                                        <button className="btn-sm btn-danger" onClick={() => updateServiceStatus(selectedNode.id, service.id, 'FAILED')}>Stop</button>
+                                        <button className="btn-sm btn-secondary" onClick={() => restartService(selectedNode.id, service.id)}>Restart</button>
+                                        <button className="btn-sm btn-outline" onClick={() => deployUpdate(selectedNode.id)}>Deploy</button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    </>
-                )
-            }
+                    </div>
+                </>
+            )}
 
-            <p>Node ID: {selectedNode.id}</p>
+            {/* Testing Tools */}
+            <div className="panel-section">
+                <h4>Diagnostics</h4>
+                <div className="input-with-button">
+                    <input
+                        type="text"
+                        placeholder="Target (IP/Hostname)"
+                        value={pingTarget}
+                        onChange={(e) => setPingTarget(e.target.value)}
+                    />
+                    <button className="btn-primary" onClick={() => pingNode(packetType)}>Ping</button>
+                </div>
+            </div>
 
-            <input
-                type="text"
-                placeholder="Node ID or hostname"
-                value={pingTarget}
-                onChange={(e) => setPingTarget(e.target.value)}
-            />
-
-            <button
-                onClick={() =>
-                    pingNode(packetType)
-                }
-            >
-                Ping Node
-            </button>
-
-            <div className="firewall-panel">
+            {/* Firewall Rules */}
+            <div className="panel-section firewall-panel">
                 <h4>Firewall Rules</h4>
-
-                {
-                    firewallRules.map((rule) => (
-                        <div
-                            key={rule.id}
-                            className="firewall-rule"
-                        >
-                            <span>
-                                {rule.action}
-                                {' '}
-                                {rule.protocol}
-                                {' '}
-                                {rule.source}
-                                {' → '}
-                                {rule.target}
+                <div className="firewall-list">
+                    {firewallRules.map((rule) => (
+                        <div key={rule.id} className="firewall-rule">
+                            <span className="rule-text">
+                                <strong className={rule.action === 'DENY' ? 'text-danger' : 'text-success'}>{rule.action}</strong> {rule.protocol}
+                                <br /><small>{rule.source} → {rule.target}</small>
                             </span>
-
-                            <button
-                                onClick={() =>
-                                    removeRule(rule.id)
-                                }
-                            >
-                                Delete
-                            </button>
+                            <button className="btn-sm btn-danger-outline" onClick={() => removeRule(rule.id)}>Del</button>
                         </div>
-                    ))
-                }
-
+                    ))}
+                </div>
                 <button
-                    onClick={() =>
-                        addRule({
-                            action: 'DENY',
-                            protocol: 'ICMP',
-                            source: 'ANY',
-                            target: '8.8.8.8'
-                        })
-                    }
+                    className="btn-secondary w-full mt-2"
+                    onClick={() => addRule({ action: 'DENY', protocol: 'ICMP', source: 'ANY', target: '8.8.8.8' })}
                 >
-                    Block Google DNS
+                    + Block Google DNS
                 </button>
             </div>
 
-            <button onClick={deleteSelectedNode}>
-                Delete Node
-            </button>
-
-            <button onClick={requestDhcp}>
-                Request DHCP
-            </button>
+            {/* Danger Zone */}
+            <div className="panel-section border-none pt-4">
+                <button className="btn-danger w-full" onClick={deleteSelectedNode}>
+                    Delete Node
+                </button>
+            </div>
         </div>
     )
 }

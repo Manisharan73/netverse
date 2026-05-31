@@ -4,14 +4,12 @@ export async function resolveArp({ sourceNode, targetNode, addEvent, addArpEntry
     addEvent({
         type: 'ARP',
         severity: 'INFO',
-
         message: `Broadcasting ARP request`
     })
 
     addEvent({
         type: 'ARP',
         severity: 'INFO',
-
         message: `ARP Request: Who has ${targetNode.data.ip}?`
     })
 
@@ -20,6 +18,7 @@ export async function resolveArp({ sourceNode, targetNode, addEvent, addArpEntry
     )
 
     addArpEntry(
+        sourceNode.id.toString(),
         targetNode.data.ip,
         targetNode.data.mac
     )
@@ -27,7 +26,6 @@ export async function resolveArp({ sourceNode, targetNode, addEvent, addArpEntry
     addEvent({
         type: 'ARP',
         severity: 'SUCCESS',
-
         message: `${targetNode.data.ip} is at ${targetNode.data.mac}`
     })
 

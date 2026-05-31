@@ -50,9 +50,14 @@ const useSwitchStore = create((set) => ({
         }),
 
     getPort(switchId, mac) {
-        return (
-            useSwitchStore.getState().macTable[switchId]?.[mac]
-        )
+        const entry = useSwitchStore.getState().macTable[switchId]?.[mac]
+        if (!entry) return null
+        
+        const age = Date.now() - entry.learnedAt
+        if (age > 300000) {
+            return null
+        }
+        return entry
     }
 }))
 

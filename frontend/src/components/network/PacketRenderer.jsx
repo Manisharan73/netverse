@@ -1,8 +1,7 @@
 import { useMemo } from "react"
 import usePacketStore from '../../stores/packet.store'
-import '../../styles/packet-renderer.css'
 
-function packetRenderer({ nodes }) {
+function PacketRenderer({ nodes }) {
     const packets = usePacketStore((state) => state.packets)
 
     const nodeMap = useMemo(() => {
@@ -46,4 +45,4 @@ function packetRenderer({ nodes }) {
     )
 }
 
-export default packetRenderer
+export default PacketRenderer

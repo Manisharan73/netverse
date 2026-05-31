@@ -1,4 +1,3 @@
-import '../../styles/link-config-panel.css'
 
 function LinkConfigPanel({
     selectedEdge,

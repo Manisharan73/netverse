@@ -1,0 +1,73 @@
+.network-canvas {
+  position: relative;
+  height: 80vh;
+  background: var(--bg-surface);
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--border-darker);
+  box-shadow: var(--shadow-lg);
+}
+
+.network-toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+/* ReactFlow Custom Nodes */
+.custom-node {
+  position: relative;
+  min-width: 200px;
+  background: var(--bg-panel);
+  border: 2px solid var(--border-darker);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  transition: transform 0.2s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.custom-node:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.custom-node .status-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.node-header {
+  background: var(--border-darker);
+  color: var(--text-main);
+  padding: 14px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.node-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-panel);
+}
+
+.node-body p {
+  color: var(--text-main);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.node-ip {
+  color: var(--text-blue);
+  font-size: 13px;
+  font-family: monospace;
+}
+
+.router-node { border-color: var(--primary); }
+.server-node { border-color: var(--emerald); }
