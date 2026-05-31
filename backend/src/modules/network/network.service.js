@@ -1,6 +1,6 @@
-const Network = require('./network.model')
-const Node = require('./node.model')
-const Edge = require('./edge.model')
+const Network = require('../../models/network.model')
+const Node = require('../../models/node.model')
+const Edge = require('../../models/edge.model')
 
 async function createNetwork(data) {
     const network = await Network.create({

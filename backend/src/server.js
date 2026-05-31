@@ -48,8 +48,8 @@ io.on('connection', (socket) => {
     })
 })
 
-const User = require('./modules/users/user.model')
-require('./modules/network/associations')
+const User = require('./models/user.model')
+require('./models/index')
 
 const authRoutes = require('./modules/auth/auth.routes')
 app.use('/api/auth', authRoutes)

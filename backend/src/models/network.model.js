@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize')
-const sequelize = require('../../database/index')
+const sequelize = require('../database/index')
 
 const Network = sequelize.define('Network', {
     name: {
