@@ -4,7 +4,9 @@ const User = require('../../models/user.model')
 const { Op } = require('sequelize')
 require('dotenv').config()
 
-const { validateRegister, validateLogin } = require('./auth.validation')
+const { validateRegister, validateLogin } = require('../../validation/auth.schema')
+
+const SALT_ROUNDS = 12
 
 async function registerUser(data) {
     validateRegister(data)
@@ -12,14 +14,16 @@ async function registerUser(data) {
     const { username, email, password } = data
 
     const existingUser = await User.findOne({
-        where: { email }
+        where: {
+            [Op.or]: [{ email }, { username }]
+        }
     })
 
     if (existingUser) {
         throw new Error('User already exists!')
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10)
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS)
 
     const safeUser = await User.create({
         username,
@@ -27,21 +31,19 @@ async function registerUser(data) {
         password: hashedPassword
     })
 
-    return safeUser
+    return sanitizeUser(safeUser)
 }
 
 async function loginUser(data) {
     validateLogin(data)
 
+    const { identifier, password } = data
+
     const user = await User.findOne({
         where: {
             [Op.or]: [
-                {
-                    email: data.identifier
-                },
-                {
-                    username: data.identifier
-                }
+                { email: identifier },
+                { username: identifier }
             ]
         }
     })
@@ -50,7 +52,7 @@ async function loginUser(data) {
         throw new Error('Invalid credentials!')
     }
 
-    const isPasswordValid = await bcrypt.compare(data.password, user.password)
+    const isPasswordValid = await bcrypt.compare(password, user.password)
 
     if (!isPasswordValid) {
         throw new Error('Invalid credentials!')
@@ -59,7 +61,7 @@ async function loginUser(data) {
     const token = jwt.sign(
         {
             id: user.id,
-            email: user.email
+            role: user.role || 'USER',
         },
         process.env.JWT_SECRET,
         {
@@ -69,12 +71,17 @@ async function loginUser(data) {
 
     return {
         token,
-        user: {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            createdAt: user.createdAt
-        }
+        user: sanitizeUser(user)
+    }
+}
+
+function sanitizeUser(user) {
+    return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt
     }
 }
 

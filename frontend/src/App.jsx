@@ -4,10 +4,13 @@ import RegisterPage from './pages/RegisterPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import DashboardPage from './pages/DashboardPage'
 import NetworksPage from './pages/NetworksPage'
+import { Toaster } from 'react-hot-toast'
 
 function App() {
   return (
     <>
+      <Toaster position='top-right' />
+
       <BrowserRouter>
         <Routes>
           <Route path='/' element={<LoginPage />} />

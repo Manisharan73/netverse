@@ -2,14 +2,27 @@ const { DataTypes } = require('sequelize')
 const sequelize = require('../database/index')
 
 const Edge = sequelize.define('Edge', {
-    sourceNodeId: {
-        type: DataTypes.STRING,
+    id: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true
+    },
+
+    networkId: {
+        type: DataTypes.UUID,
         allowNull: false
     },
 
+    sourceNodeId: {
+        type: DataTypes.UUID,
+        allowNull: false,
+        index: true
+    },
+
     targetNodeId: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: DataTypes.UUID,
+        allowNull: false,
+        index: true
     },
 
     bandwidth: {
@@ -27,14 +40,49 @@ const Edge = sequelize.define('Edge', {
         defaultValue: 0.02
     },
 
+    jitter: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0
+    },
+
     status: {
-        type: DataTypes.STRING,
+        type: DataTypes.ENUM('ONLINE', 'OFFLINE', 'DEGRADED'),
         defaultValue: 'ONLINE'
     },
 
-    traffic: {
+    currentLoad: {
         type: DataTypes.INTEGER,
         defaultValue: 0
+    },
+
+    maxQueueSize: {
+        type: DataTypes.INTEGER,
+        defaultValue: 1000
+    },
+
+    queueDropRate: {
+        type: DataTypes.FLOAT,
+        defaultValue: 0.0
+    },
+
+    isBlocked: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+    },
+
+    stpCost: {
+        type: DataTypes.INTEGER,
+        defaultValue: 1
+    },
+
+    label: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+
+    color: {
+        type: DataTypes.STRING,
+        defaultValue: '#4ade80'
     }
 })
 
