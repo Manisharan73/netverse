@@ -14,7 +14,6 @@
    -------------------------------------- */
 .config-panel {
   width: 360px; /* Slightly wider to accommodate grids */
-  max-height: 85vh;
   display: flex;
   flex-direction: column;
   gap: 16px;

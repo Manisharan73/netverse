@@ -18,7 +18,7 @@ const Network = sequelize.define('Network', {
         allowNull: true
     },
 
-    ownerId: {
+    userId: {
         type: DataTypes.UUID,
         allowNull: false,
         index: true
@@ -95,6 +95,11 @@ const Network = sequelize.define('Network', {
     },
 
     stateSnapshot: {
+        type: DataTypes.JSON,
+        allowNull: true
+    },
+
+    simulation: {
         type: DataTypes.JSON,
         allowNull: true
     },

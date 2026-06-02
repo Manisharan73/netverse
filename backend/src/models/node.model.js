@@ -50,6 +50,26 @@ const Node = sequelize.define('Node', {
         allowNull: true
     },
 
+    subnet: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+
+    os: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+
+    hostname: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+
+    metrics: {
+        type: DataTypes.JSON,
+        allowNull: true
+    },
+
     status: {
         type: DataTypes.ENUM('ONLINE', 'OFFLINE', 'DEGRADED'),
         defaultValue: 'ONLINE'

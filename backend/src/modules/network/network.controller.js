@@ -2,7 +2,7 @@ const networkService = require('./network.service')
 
 async function createNetwork(req, res) {
     try {
-        const network = await networkService.createNetwork(req.body)
+        const network = await networkService.createNetwork(req.user.id, req.body)
         res.status(201).json(network)
     } catch(err) {
         res.status(500).json({
@@ -13,7 +13,7 @@ async function createNetwork(req, res) {
 
 async function getNetwork(req, res) {
     try {
-        const networks = await networkService.getNetwork()
+        const networks = await networkService.getNetwork(req.user.id)
         res.json(networks)
     } catch(err) {
         res.status(500).json({
@@ -24,7 +24,12 @@ async function getNetwork(req, res) {
 
 async function getNetworkById(req, res) {
     try {
-        const network = await networkService.getNetworkById(req.params.id)
+        const network = await networkService.getNetworkById(req.params.id, req.user.id)
+        
+        if (!network) {
+            return res.status(404).json({ error: 'Network not found' })
+        }
+        
         res.json(network)
     } catch(err) {
         res.status(500).json({
@@ -37,6 +42,7 @@ async function updateNetwork(req, res) {
     try {
         const network = await networkService.updateNetwork(
             req.params.id,
+            req.user.id,
             req.body
         )
 

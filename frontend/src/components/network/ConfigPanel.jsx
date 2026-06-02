@@ -1,17 +1,12 @@
 import socket from '../../websocket/socket'
 import useNetworkStore from '../../stores/network.store'
 import React, { useState, useEffect } from 'react'
-import { requestDhcpLease } from '../../utils/dhcp.utils'
-import useEventStore from '../../stores/event.store'
 import useFirewallStore from '../../stores/firewall.store'
 
 function ConfigPanel({ selectedNode, selectedEdge, nodes, setNodes, setEdges, setSelectedNode, setSelectedEdge, pingTarget, setPingTarget, pingNode, deleteSelectedNode, updateServiceStatus, restartService, deployUpdate }) {
     const nodeMetrics = useNetworkStore((state) => state.nodeMetrics)
-    const addEvent = useEventStore((state) => state.addEvent)
 
     const firewallRules = useFirewallStore((state) => state.rules)
-    const addRule = useFirewallStore((state) => state.addRule)
-    const removeRule = useFirewallStore((state) => state.removeRule)
 
     const [packetType, setPacketType] = useState('ICMP')
 
@@ -68,41 +63,37 @@ function ConfigPanel({ selectedNode, selectedEdge, nodes, setNodes, setEdges, se
         }
     }
 
+    const handleAddRule = (rule) => {
+        const currentNetwork = useNetworkStore.getState().currentNetwork
+        if (!currentNetwork || !selectedNode) return
+
+        socket.emit('firewall:addRule', {
+            networkId: currentNetwork.id,
+            nodeId: selectedNode.id,
+            rule
+        })
+    }
+
+    const handleRemoveRule = (ruleId) => {
+        const currentNetwork = useNetworkStore.getState().currentNetwork
+        if (!currentNetwork) return
+
+        socket.emit('firewall:removeRule', {
+            networkId: currentNetwork.id,
+            ruleId
+        })
+    }
+
     async function requestDhcp() {
         if (!selectedNode) return
 
-        const lease = await requestDhcpLease({
-            node: selectedNode,
-            addEvent
+        const currentNetwork = useNetworkStore.getState().currentNetwork
+        if (!currentNetwork) return
+
+        socket.emit('dhcp:request', {
+            networkId: currentNetwork.id,
+            nodeId: selectedNode.id
         })
-
-        if (!lease) return
-
-        setNodes((nodes) =>
-            nodes.map((node) => {
-                if (node.id.toString() !== selectedNode.id.toString()) return node
-
-                return {
-                    ...node,
-                    data: {
-                        ...node.data,
-                        ip: lease.ip,
-                        subnet: lease.subnet,
-                        gateway: lease.gateway
-                    }
-                }
-            })
-        )
-
-        setSelectedNode((prev) => ({
-            ...prev,
-            data: {
-                ...prev.data,
-                ip: lease.ip,
-                subnet: lease.subnet,
-                gateway: lease.gateway
-            }
-        }))
     }
 
     if (!selectedNode && !selectedEdge) return null
@@ -340,13 +331,13 @@ function ConfigPanel({ selectedNode, selectedEdge, nodes, setNodes, setEdges, se
                                 <strong className={rule.action === 'DENY' ? 'text-danger' : 'text-success'}>{rule.action}</strong> {rule.protocol}
                                 <br /><small>{rule.source} → {rule.target}</small>
                             </span>
-                            <button className="btn-sm btn-danger-outline" onClick={() => removeRule(rule.id)}>Del</button>
+                            <button className="btn-sm btn-danger-outline" onClick={() => handleRemoveRule(rule.id)}>Del</button>
                         </div>
                     ))}
                 </div>
                 <button
                     className="btn-secondary w-full mt-2"
-                    onClick={() => addRule({ action: 'DENY', protocol: 'ICMP', source: 'ANY', target: '8.8.8.8' })}
+                    onClick={() => handleAddRule({ action: 'DENY', protocol: 'ICMP', source: 'ANY', target: '8.8.8.8' })}
                 >
                     + Block Google DNS
                 </button>

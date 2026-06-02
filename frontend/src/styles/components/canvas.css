@@ -69,5 +69,34 @@
   font-family: monospace;
 }
 
-.router-node { border-color: var(--primary); }
-.server-node { border-color: var(--emerald); }
+.router-node {
+  border-color: var(--primary);
+}
+
+.server-node {
+  border-color: var(--emerald);
+}
+
+.custom-node .react-flow__handle {
+  width: 14px;
+  height: 14px;
+  background-color: var(--text-main);
+  border: 2px solid var(--border-darker);
+  border-radius: 50%;
+  cursor: crosshair;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.custom-node .react-flow__handle:hover {
+  transform: scale(1.4);
+  background-color: var(--primary);
+}
+
+/* Adjust position slightly for the larger size */
+.custom-node .react-flow__handle-left {
+  left: -7px;
+}
+
+.custom-node .react-flow__handle-right {
+  right: -7px;
+}

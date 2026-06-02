@@ -1,119 +1,202 @@
 const Network = require('../../models/network.model')
 const Node = require('../../models/node.model')
 const Edge = require('../../models/edge.model')
+const sequelize = require('../../database/index')
 
-async function createNetwork(data) {
-    const network = await Network.create({
-        name: data.name,
-        description: data.description
-    })
-
-    if(data.nodes?.length) {
-        for(const node of data.nodes) {
-            await Node.create({
-                frontendId: node.id,
-                NetworkId: network.id,
-                type: node.type,
-                label: node.data.label,
-                ipAddress: node.data.ip || '',
-                posX: node.position.x,
-                posY: node.position.y,
-                status: 'ONLINE'
-            })
-        }
-    }
-
-    if(data.edges?.length) {
-        for(const edge of data.edges) {
-            await Edge.create({
-                NetworkId: network.id,
-                sourceNodeId: edge.source,
-                targetNodeId: edge.target,
-                bandwidth: edge.data?.bandwidth || 100,
-                latency: edge.data?.latency || 10,
-                packetLoss: edge.data?.packetLoss || 0.02,
-                status: edge.data?.status || 'ONLINE',
-                traffic: edge.data?.traffic || 0
-            })
-        }
-    }
-
-    return network
+const NODE_TYPE_MAP = {
+    routerNode: 'ROUTER',
+    switchNode: 'SWITCH',
+    serverNode: 'SERVER',
+    hostNode: 'HOST'
 }
 
-async function getNetwork() {
+async function createNetwork(userId, data) {
+    console.log(userId, data)
+
+    let transaction;
+
+    try {
+        transaction = await sequelize.transaction()
+
+        const network = await Network.create({
+            name: data.name || 'Untitled Network',
+            description: data.description || '',
+            userId
+        }, { transaction })
+
+        if (Array.isArray(data.nodes) && data.nodes.length > 0) {
+            const nodesToCreate = data.nodes.map((node) => ({
+                frontendId: String(node.id),
+                networkId: network.id,
+                type: NODE_TYPE_MAP[node.type] || 'HOST',
+                label: node.data?.label || node.data?.hostname || 'Node',
+                ipAddress: node.data?.ip || node.data?.ipAddress || '',
+                subnet: node.data?.subnet || '',
+                gateway: node.data?.gateway || '',
+                os: node.data?.os || '',
+                hostname: node.data?.hostname || '',
+                macAddress: node.data?.macAddress || '',
+                metrics: node.metrics || null,
+                posX: Number(node.position?.x) || 0,
+                posY: Number(node.position?.y) || 0,
+                status: node.data?.status || 'ONLINE'
+            }))
+
+            await Node.bulkCreate(nodesToCreate, { transaction })
+        }
+
+        if (Array.isArray(data.edges) && data.edges.length > 0) {
+            const createdNodes = await Node.findAll({
+                where: { networkId: network.id },
+                transaction
+            })
+            const nodeMap = {}
+            createdNodes.forEach(n => {
+                nodeMap[n.frontendId] = n.id
+            })
+
+            const edgesToCreate = data.edges.map((edge) => ({
+                networkId: network.id,
+                sourceNodeId: nodeMap[edge.source],
+                targetNodeId: nodeMap[edge.target],
+                bandwidth: edge.data?.bandwidth ?? 100,
+                latency: edge.data?.latency ?? 10,
+                packetLoss: edge.data?.packetLoss ?? 0.02,
+                status: edge.data?.status || 'ONLINE',
+                traffic: edge.data?.traffic ?? 0
+            }))
+
+            await Edge.bulkCreate(edgesToCreate, { transaction })
+        }
+
+        await transaction.commit()
+        return await getNetworkById(network.id, userId)
+    } catch (err) {
+        console.error(err)
+
+        if (transaction) {
+            await transaction.rollback()
+        }
+        
+        throw err
+    }
+}
+
+async function getNetwork(userId) {
     return await Network.findAll({
+        where: { userId },
         include: [
-            Node,
-            Edge
+            { model: Node },
+            { model: Edge }
         ]
     })
 }
 
-async function getNetworkById(id) {
+async function getNetworkById(id, userId) {
     return await Network.findByPk(id, {
+        where: { userId },
         include: [
-            Node,
-            Edge
+            {
+                model: Node,
+                order: [['id', 'ASC']]
+            },
+            {
+                model: Edge,
+                order: [['id', 'ASC']]
+            }
         ]
     })
 }
 
-async function updateNetwork(id, data) {
-    const network = await Network.findByPk(id)
+async function updateNetwork(id, userId, data) {
+    let transaction;
 
-    if(!network) {
-        throw new Error('Network not found!')
-    }
+    try {
+        transaction = await sequelize.transaction()
 
-    await network.update({
-        name: data.name,
-        description: data.description
-    })
+        const network = await Network.findByPk(id, {
+            where: { userId },
+            transaction
+        })
 
-    await Edge.destroy({
-        where: {
-            NetworkId: id
+        if (!network) {
+            throw new Error('Network not found or unauthorized!')
         }
-    })
 
-    await Node.destroy({
-        where: {
-            NetworkId: id
+        await network.update({
+            name: data.name,
+            description: data.description,
+            simulation: data.simulation
+        }, { transaction })
+
+        await Edge.destroy({
+            where: {
+                networkId: id
+            },
+            transaction
+        })
+
+        await Node.destroy({
+            where: {
+                networkId: id
+            },
+            transaction
+        })
+
+        if (Array.isArray(data.nodes) && data.nodes.length > 0) {
+            const nodesToCreate = data.nodes.map((node) => ({
+                frontendId: String(node.id),
+                networkId: id,
+                type: NODE_TYPE_MAP[node.type] || 'HOST',
+                label: node.data?.label || node.data?.hostname || 'Node',
+                ipAddress: node.data?.ip || node.data?.ipAddress || '',
+                subnet: node.data?.subnet || '',
+                gateway: node.data?.gateway || '',
+                os: node.data?.os || '',
+                hostname: node.data?.hostname || '',
+                macAddress: node.data?.macAddress || '',
+                metrics: node.metrics || null,
+                posX: Number(node.position?.x) || 0,
+                posY: Number(node.position?.y) || 0,
+                status: node.data?.status || 'ONLINE'
+            }))
+
+            await Node.bulkCreate(nodesToCreate, { transaction })
         }
-    })
 
-    if(data.nodes?.length) {
-        for(const node of data.nodes) {
-            await Node.create({
-                frontendId: node.id,
-                NetworkId: id,
-                type: node.type,
-                label: node.data.label,
-                ipAddress: node.data.ip || '',
-                posX: node.position.x,
-                posY: node.position.y,
-                status: 'ONLINE'
+        if (Array.isArray(data.edges) && data.edges.length > 0) {
+            const createdNodes = await Node.findAll({
+                where: { networkId: id },
+                transaction
             })
-        }
-    }
+            const nodeMap = {}
+            createdNodes.forEach(n => {
+                nodeMap[n.frontendId] = n.id
+            })
 
-    if(data.edges?.length) {
-        for(const edge of data.edges) {
-            await Edge.create({
-                NetworkId: id,
-                sourceNodeId: edge.source,
-                targetNodeId: edge.target,
-                bandwidth: edge.data?.bandwidth || 100,
-                latency: edge.data?.latency || 10,
-                packetLoss: edge.data?.packetLoss || 0.02,
+            const edgesToCreate = data.edges.map((edge) => ({
+                networkId: id,
+                sourceNodeId: nodeMap[edge.source],
+                targetNodeId: nodeMap[edge.target],
+                bandwidth: edge.data?.bandwidth ?? 100,
+                latency: edge.data?.latency ?? 10,
+                packetLoss: edge.data?.packetLoss ?? 0.02,
                 status: edge.data?.status || 'ONLINE',
-                traffic: edge.data?.traffic || 0
-            })
-        }
-    }
+                traffic: edge.data?.traffic ?? 0
+            }))
 
-    return network
+            await Edge.bulkCreate(edgesToCreate, { transaction })
+        }
+
+        await transaction.commit()
+        return await getNetworkById(network.id, userId)
+    } catch (err) {
+        if (transaction) {
+            await transaction.rollback()
+        }
+
+        throw err
+    }
 }
 
 module.exports = {

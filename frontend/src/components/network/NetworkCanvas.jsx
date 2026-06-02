@@ -33,6 +33,9 @@ const NetworkCanvas = React.memo(function NetworkCanvas({
                 onNodeDragStop={onNodeDragStop}
                 fitView
                 onlyRenderVisibleElements
+                panOnScroll={false}
+                zoomOnScroll={false}
+                preventScrolling={false}
             >
 
                 <Controls />

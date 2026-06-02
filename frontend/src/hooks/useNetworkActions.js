@@ -2,9 +2,17 @@ import { useCallback } from 'react'
 import socket from '../websocket/socket'
 import { addEdge } from 'reactflow'
 import { createNetwork, updateNetwork, getNetworkById } from '../services/network.service'
-import { exportSimulationState, importSimulationState } from '../utils/networkSerializer'
+import toast from 'react-hot-toast'
 import { createNodeFromTemplate } from '../utils/createNodeFromTemplate'
 import { DEVICE_TEMPLATES, SWITCH_TEMPLATE } from '../constants/deviceTemplates'
+import useNetworkStore from '../stores/network.store'
+
+const FRONTEND_NODE_TYPE_MAP = {
+    ROUTER: 'routerNode',
+    SWITCH: 'switchNode',
+    SERVER: 'serverNode',
+    HOST: 'hostNode'
+}
 
 export default function useNetworkActions({
     nodes,
@@ -50,61 +58,80 @@ export default function useNetworkActions({
         socket.emit('edge:add', newEdge)
     }, [edges, setEdges])
 
-    const saveNetwork = async () => {
+    const saveNetwork = async (name, description) => {
         try {
+            const currentNetwork = useNetworkStore.getState().currentNetwork
+            const metricsMap = useNetworkStore.getState().nodeMetrics
+
+            const payloadNodes = nodes.map(node => ({
+                ...node,
+                metrics: metricsMap[node.id] || null
+            }))
+
             const networkData = {
-                name: 'My Infrastructure',
-                description: 'NetVerse Topology',
-                nodes,
-                edges,
-                simulation: exportSimulationState()
+                name: name || currentNetwork?.name || 'Untitled Network',
+                description: description !== undefined ? description : (currentNetwork?.description || ''),
+                nodes: payloadNodes,
+                edges
             }
 
             if (currentNetworkId) {
-                await updateNetwork(currentNetworkId, networkData)
-                alert('Network updated!')
+                const updatedNetwork = await updateNetwork(currentNetworkId, networkData)
+                setCurrentNetwork(updatedNetwork)
+                toast.success('Network updated')
             } else {
                 const network = await createNetwork(networkData)
                 setCurrentNetwork(network)
                 setCurrentNetworkId(network.id)
-                alert('Network saved!')
+                toast.success('Network saved')
             }
         } catch (err) {
             console.error(err)
-            alert('Failed to save network!')
+            toast.error('Failed to save network')
         }
     }
 
-    const loadNetwork = useCallback(async () => {
+    const loadNetwork = useCallback(async (networkIdToLoad) => {
+        const idToUse = networkIdToLoad || currentNetworkId
+        if (!idToUse) {
+            setError('No network selected')
+            return
+        }
+
         setLoading(true)
         setError(null)
         try {
-            const network = await getNetworkById(3)
+            const network = await getNetworkById(idToUse)
             setCurrentNetworkId(network.id)
+            setCurrentNetwork(network)
 
             const formattedNodes = []
             const parsedMetrics = {}
 
+            const dbToFrontendNodeMap = {}
+
             network.Nodes.forEach((node) => {
                 const id = node.frontendId.toString()
+                dbToFrontendNodeMap[node.id] = id
+
                 formattedNodes.push({
                     id,
-                    type: node.type || 'default',
+                    type: FRONTEND_NODE_TYPE_MAP[node.type] || 'hostNode',
                     position: { x: Number(node.posX) || 0, y: Number(node.posY) || 0 },
                     data: {
-                        label: node.label || 'Node', ip: node.ip || '', subnet: node.subnet || '', gateway: node.gateway || '', os: node.os || ''
+                        label: node.label || 'Node', ip: node.ipAddress || '', subnet: node.subnet || '', gateway: node.gateway || '', os: node.os || '', hostname: node.hostname || '', macAddress: node.macAddress || ''
                     }
                 })
 
-                parsedMetrics[id] = {
-                    status: node.status || 'ONLINE', cpu: node.cpu || '0%', ram: node.ram || '0%', storage: node.storage || '0%', traffic: node.traffic || 0, packetsSent: node.packetsSent || 0, packetsReceived: node.packetsReceived || 0, packetLoss: node.packetLoss || 0, uptime: node.uptime || '', services: node.services || []
+                parsedMetrics[id] = node.metrics || {
+                    status: node.status || 'ONLINE', cpu: '0%', ram: '0%', storage: '0%', traffic: 0, packetsSent: 0, packetsReceived: 0, packetLoss: 0, uptime: 0, services: []
                 }
             })
 
             const formattedEdges = network.Edges.map((edge) => ({
                 id: edge.id.toString(),
-                source: edge.sourceNodeId.toString(),
-                target: edge.targetNodeId.toString(),
+                source: dbToFrontendNodeMap[edge.sourceNodeId] || edge.sourceNodeId.toString(),
+                target: dbToFrontendNodeMap[edge.targetNodeId] || edge.targetNodeId.toString(),
                 animated: true,
                 type: 'custom',
 
@@ -120,10 +147,6 @@ export default function useNetworkActions({
             setNodes(formattedNodes)
             setEdges(formattedEdges)
             setNodeMetrics(parsedMetrics)
-
-            if (network.simulation) {
-                importSimulationState({ simulation: network.simulation })
-            }
         } catch (err) {
             console.error(err)
             setError('Failed to load network!')

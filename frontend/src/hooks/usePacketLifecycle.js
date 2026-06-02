@@ -2,22 +2,9 @@ import { useEffect } from "react"
 import usePacketStore from '../stores/packet.store'
 
 export default function usePacketLifecycle() {
-    const packets = usePacketStore((state) => state.packets)
-    const removePacket = usePacketStore((state) => state.removePacket)
-
+    // The backend now completely handles packet lifecycles.
+    // It emits 'packet:dropped' or 'packet:delivered' to clean up packets.
     useEffect(() => {
-        const interval = setInterval(() => {
-            const now = Date.now()
-
-            Object.values(packets).forEach((packet) => {
-                const expired = now - packet.createdAt > packet.ttl
-
-                if(expired) {
-                    removePacket(packet.id)
-                }
-            })
-        }, 1000)
-
-        return () => clearInterval(interval)
-    }, [packets, removePacket])
+        // No-op for Phase 1
+    }, [])
 }

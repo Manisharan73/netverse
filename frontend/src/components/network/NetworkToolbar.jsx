@@ -2,8 +2,8 @@ export default function NetworkToolbar({
     addRouter,
     addServer,
     addSwitch,
-    saveNetwork,
-    loadNetwork
+    onSaveClick,
+    onLoadClick
 }) {
     return (
         <div className="network-toolbar">
@@ -47,11 +47,11 @@ export default function NetworkToolbar({
                 Add Firewall
             </button>
 
-            <button onClick={saveNetwork}>
+            <button onClick={onSaveClick}>
                 Save Network
             </button>
 
-            <button onClick={loadNetwork}>
+            <button onClick={onLoadClick}>
                 Load Network
             </button>
         </div>
