@@ -29,6 +29,21 @@ const Network = sequelize.define('Network', {
         defaultValue: 'ACTIVE'
     },
 
+    deploymentStatus: {
+        type: DataTypes.ENUM('NOT_DEPLOYED', 'DEPLOYING', 'DEPLOYED', 'FAILED'),
+        defaultValue: 'NOT_DEPLOYED'
+    },
+
+    dockerNetworkId: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+
+    deployedAt: {
+        type: DataTypes.DATE,
+        allowNull: true
+    },
+
     isSimulating: {
         type: DataTypes.BOOLEAN,
         defaultValue: false

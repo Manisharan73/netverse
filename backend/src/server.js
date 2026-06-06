@@ -17,12 +17,20 @@ initSocketServer(server)
 
 const User = require('./models/user.model')
 require('./models/index')
+const { syncAllContainers } = require('./services/docker/docker.sync')
+const { startMetricsScheduler } = require('./services/docker/metrics.scheduler')
 
 const authRoutes = require('./modules/auth/auth.routes')
 app.use('/api/auth', authRoutes)
 
 const networkRoutes = require('./modules/network/network.routes')
 app.use('/api/networks', networkRoutes)
+
+const dockerRoutes = require('./modules/docker/docker.routes')
+app.use('/api/docker', dockerRoutes)
+
+const deploymentRoutes = require('./modules/deployment/deployment.routes')
+app.use('/api/deployment', deploymentRoutes)
 
 app.get('/', (req, res) => {
     res.json({
@@ -37,6 +45,10 @@ async function startServer() {
 
         await sequelize.sync()
         console.log('Tables synced sucessfully!')
+
+        await syncAllContainers()
+
+        startMetricsScheduler()
 
         server.listen(PORT, () => {
             console.log(`Server is listening on port ${PORT}`)

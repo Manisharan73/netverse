@@ -2,6 +2,7 @@ const Network = require('../../models/network.model')
 const Node = require('../../models/node.model')
 const Edge = require('../../models/edge.model')
 const sequelize = require('../../database/index')
+const nodeContainerService = require('../nodes/node.container.service')
 
 const NODE_TYPE_MAP = {
     routerNode: 'ROUTER',
@@ -136,6 +137,8 @@ async function updateNetwork(id, userId, data) {
             transaction
         })
 
+        await nodeContainerService.deleteNetworkContainers(id)
+
         await Node.destroy({
             where: {
                 networkId: id
@@ -199,9 +202,23 @@ async function updateNetwork(id, userId, data) {
     }
 }
 
+async function deleteNetwork(id, userId) {
+    const network = await Network.findByPk(id, { where: { userId } })
+    
+    if (!network) {
+        throw new Error('Network not found or unauthorized!')
+    }
+
+    await nodeContainerService.deleteNetworkContainers(id)
+
+    await network.destroy()
+    return true
+}
+
 module.exports = {
     createNetwork,
     getNetwork,
     getNetworkById,
-    updateNetwork
+    updateNetwork,
+    deleteNetwork
 }

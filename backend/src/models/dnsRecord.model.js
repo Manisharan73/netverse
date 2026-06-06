@@ -7,14 +7,17 @@ const DnsRecord = sequelize.define('DnsRecord', {
         defaultValue: DataTypes.UUIDV4,
         primaryKey: true
     },
+
     networkId: {
         type: DataTypes.UUID,
         allowNull: false
     },
+
     domain: {
         type: DataTypes.STRING,
         allowNull: false
     },
+    
     ipAddress: {
         type: DataTypes.STRING,
         allowNull: false

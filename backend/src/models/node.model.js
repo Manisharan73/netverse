@@ -146,6 +146,22 @@ const Node = sequelize.define('Node', {
     containerStatus: {
         type: DataTypes.ENUM('NOT_CREATED', 'RUNNING', 'STOPPED'),
         defaultValue: 'NOT_CREATED'
+    },
+
+    containerName: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        unique: true
+    },
+
+    containerImage: {
+        type: DataTypes.STRING,
+        defaultValue: 'ubuntu'
+    },
+
+    lastContainerSync: {
+        type: DataTypes.DATE,
+        allowNull: true
     }
 
 })

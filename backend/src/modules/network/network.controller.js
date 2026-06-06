@@ -56,9 +56,22 @@ async function updateNetwork(req, res) {
     }
 }
 
+async function deleteNetwork(req, res) {
+    try {
+        await networkService.deleteNetwork(req.params.id, req.user.id)
+        res.status(200).json({ success: true })
+    } catch(err) {
+        console.error(err)
+        res.status(500).json({
+            error: err.message
+        })
+    }
+}
+
 module.exports = {
     createNetwork,
     getNetwork,
     getNetworkById,
-    updateNetwork
+    updateNetwork,
+    deleteNetwork
 }

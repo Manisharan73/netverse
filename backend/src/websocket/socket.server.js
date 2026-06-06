@@ -1,7 +1,6 @@
 const { Server } = require('socket.io')
 const { setupTopologyEvents } = require('./topology.events')
 const { setupPacketEvents } = require('./packet.events')
-const { startMetricsEngine } = require('../simulation/metrics/metrics.engine')
 
 let io;
 
@@ -33,9 +32,6 @@ function initSocketServer(server) {
         setupTopologyEvents(socket)
         setupPacketEvents(socket, io)
     })
-
-    // Start Backend Metrics Loop
-    startMetricsEngine(io)
 
     return io
 }

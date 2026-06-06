@@ -1,28 +1,39 @@
 const { DataTypes } = require('sequelize')
 const sequelize = require('../database')
 
-const EventLog = sequelize.define('EventLog', {
+const ArpEntry = sequelize.define('ArpEntry', {
     id: {
         type: DataTypes.UUID,
         defaultValue: DataTypes.UUIDV4,
         primaryKey: true
     },
+
     networkId: {
         type: DataTypes.UUID,
         allowNull: false
     },
-    type: {
+
+    sourceNodeId: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        comment: "The node ID this ARP table belongs to"
+    },
+
+    ipAddress: {
         type: DataTypes.STRING,
         allowNull: false
     },
-    severity: {
+
+    macAddress: {
         type: DataTypes.STRING,
         allowNull: false
     },
-    message: {
-        type: DataTypes.TEXT,
-        allowNull: false
+    
+    expiresAt: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: () => new Date(Date.now() + 5 * 60 * 1000) 
     }
 })
 
-module.exports = EventLog
+module.exports = ArpEntry
