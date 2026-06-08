@@ -52,3 +52,29 @@ function setupTopologyEvents(socket) {
 module.exports = {
     setupTopologyEvents
 }
+
+function emitNetworkDeployed(networkId) {
+    try {
+        const { getIo } = require('./socket.server')
+        const io = getIo()
+        io.to(`network:${networkId}`).emit('network:deployed', { networkId })
+    } catch (err) {
+        console.error('Failed to emit network deployed:', err.message)
+    }
+}
+
+function emitNetworkDestroyed(networkId) {
+    try {
+        const { getIo } = require('./socket.server')
+        const io = getIo()
+        io.to(`network:${networkId}`).emit('network:destroyed', { networkId })
+    } catch (err) {
+        console.error('Failed to emit network destroyed:', err.message)
+    }
+}
+
+module.exports = {
+    setupTopologyEvents,
+    emitNetworkDeployed,
+    emitNetworkDestroyed
+}

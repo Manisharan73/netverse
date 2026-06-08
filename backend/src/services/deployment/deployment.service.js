@@ -5,6 +5,8 @@ const deploymentContainer = require('./deployment.container')
 const deploymentMetadata = require('./deployment.metadata')
 const deploymentVerify = require('./deployment.verify')
 const deploymentCleanup = require('./deployment.cleanup')
+const monitoringService = require('../monitoring/monitoring.service')
+const { emitNetworkDeployed, emitNetworkDestroyed } = require('../../websocket/topology.events')
 
 class DeploymentService {
     async deployNetwork(networkId) {
@@ -49,6 +51,10 @@ class DeploymentService {
             // 6. Mark DEPLOYED
             await deploymentMetadata.markDeployed(networkId, dockerNetworkInfo.Id)
 
+            // 7. Start monitoring and emit events
+            await monitoringService.startMonitoring(networkId)
+            emitNetworkDeployed(networkId)
+
             return {
                 success: true,
                 status: 'DEPLOYED',
@@ -70,6 +76,9 @@ class DeploymentService {
         }
 
         await deploymentCleanup.cleanupEverything(networkId)
+
+        monitoringService.stopMonitoring(networkId)
+        emitNetworkDestroyed(networkId)
 
         return {
             success: true,
@@ -100,6 +109,11 @@ class DeploymentService {
                     containerName: `nv_${network.id}_${node.frontendId}`
                 })
             }
+
+            // Restart monitoring
+            monitoringService.stopMonitoring(networkId)
+            await monitoringService.startMonitoring(networkId)
+            emitNetworkDeployed(networkId)
 
             return {
                 success: true,

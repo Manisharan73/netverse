@@ -18,7 +18,7 @@ initSocketServer(server)
 const User = require('./models/user.model')
 require('./models/index')
 const { syncAllContainers } = require('./services/docker/docker.sync')
-const { startMetricsScheduler } = require('./services/docker/metrics.scheduler')
+
 
 const authRoutes = require('./modules/auth/auth.routes')
 app.use('/api/auth', authRoutes)
@@ -31,6 +31,9 @@ app.use('/api/docker', dockerRoutes)
 
 const deploymentRoutes = require('./modules/deployment/deployment.routes')
 app.use('/api/deployment', deploymentRoutes)
+
+const monitoringRoutes = require('./modules/monitoring/monitoring.routes')
+app.use('/api/monitoring', monitoringRoutes)
 
 app.get('/', (req, res) => {
     res.json({
@@ -48,7 +51,7 @@ async function startServer() {
 
         await syncAllContainers()
 
-        startMetricsScheduler()
+
 
         server.listen(PORT, () => {
             console.log(`Server is listening on port ${PORT}`)
